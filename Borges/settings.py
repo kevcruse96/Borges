@@ -9,6 +9,8 @@
 #     https://doc.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://doc.scrapy.org/en/latest/topics/spider-middleware.html
 
+import os
+
 BOT_NAME = 'Borges'
 
 SPIDER_MODULES = ['Borges.spiders']
@@ -100,7 +102,13 @@ SPIDER_MIDDLEWARES = {
 DUPEFILTER_CLASS = 'scrapy_splash.SplashAwareDupeFilter'
 HTTPCACHE_STORAGE = 'scrapy_splash.SplashAwareFSCacheStorage'
 
-ELSEVIER_API_1 = 'YOUR KEY'
-ELSEVIER_API_2 = 'YOUR KEY'
-ELSEVIER_API_3 = 'YOUR KEY'
-ELSEVIER_API_4 = 'YOUR KEY'
+ELSEVIER_API_1 = os.getenv('ELSEVIER_API_1')
+ELSEVIER_API_2 = os.getenv('ELSEVIER_API_2')
+ELSEVIER_API_3 = os.getenv('ELSEVIER_API_3')
+ELSEVIER_API_4 = os.getenv('ELSEVIER_API_4')
+
+AIP_AUTHORITY_URL = os.getenv('AIP_authority_url')
+AIP_RESOURCE = os.getenv('AIP_resource')
+AIP_CLIENT_ID = os.getenv('AIP_client_id')
+AIP_CLIENT_SECRET = os.getenv('AIP_client_secret')
+AIP_BASEURL = os.getenv('AIP_baseurl')
