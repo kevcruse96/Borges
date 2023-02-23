@@ -11,42 +11,20 @@ __author__ = 'Ziqin (Shaun) Rong'
 __maintainer__ = 'Ziqin (Shaun) Rong'
 __email__ = 'rongzq08@gmail.com'
 
-
 class ElsevierJournals(scrapy.Spider):
     name = "Elsevier_Journal"
-    start_urls = ["https://www.elsevier.com/catalog?page={}&author=&cat0=27360&cat1=&categoryrestriction=&imprintname=&producttype=journal&q=&sort=datedesc".format(page)
-                  for page in range(1, 2)] +\
-                 ["https://www.elsevier.com/catalog?page={}&author=&cat0=27360&cat1=&categoryrestriction=&imprintname=&producttype=journal&q=&sort=datedesc".format(page)
-                  for page in range(1, 10)] + \
-                 ["https://www.elsevier.com/catalog?page={}&author=&cat0=27362&cat1=&categoryrestriction=&imprintname=&producttype=journal&q=&sort=datedesc".format(page)
-                  for page in range(1, 10)] + \
-                 ["https://www.elsevier.com/catalog?page={}&author=&cat0=27368&cat1=&categoryrestriction=&imprintname=&producttype=journal&q=&sort=datedesc".format(page)
-                  for page in range(1, 6)] + \
-                 ["https://www.elsevier.com/catalog?page={}&author=&cat0=27370&cat1=&categoryrestriction=&imprintname=&producttype=journal&q=&sort=datedesc".format(page)
-                  for page in range(1, 14)] +\
-                 ["https://www.elsevier.com/catalog?page={}&author=&cat0=27372&cat1=&categoryrestriction=&imprintname=&producttype=journal&q=&sort=datedesc".format(page)
-                  for page in range(1, 7)] + \
-                 ["https://www.elsevier.com/catalog?page={}&author=&cat0=27374&cat1=&categoryrestriction=&imprintname=&producttype=journal&q=&sort=datedesc".format(page)
-                  for page in range(1, 11)]
+    start_urls = [f"https://www.elsevier.com/search-results?labels=journals&page={page}" for page in range(1, 3)]
 
     def parse(self, response):
-        for journal_tab in response.css(".listing-products"):
-            journal_link = journal_tab.css(".listing-products-info-text-title a::attr(href)").extract_first()
-            journal_link = response.urljoin(journal_link)
+        journal_titles = response.css('.search-result-title a::text').extract()
+        # TODO: find a way to extract true/false for "Open Access"
+        journal_urls = response.css('.journal-website a::attr(href)').extract()
+        journal_issns = response.css('.journal-result-issn *::text').extract() # ISSNs were not extracted in previous version... not sure when they were grabbed before
 
-            yield scrapy.Request(journal_link, callback=self._parse_journal_page)
-
-    @staticmethod
-    def _parse_journal_page(response):
-        journal_summary = {}
-        title_html = response.css("h1").extract_first()
-        journal_summary["Journal_Title"] = BeautifulSoup(title_html).get_text().strip()
-
-        open_access_html = response.css(".open-access-btn a").extract_first()
-        journal_summary["Open_Access"] = (BeautifulSoup(open_access_html).get_text().strip() == "Open Access")
-
-        journal_main_page_link = response.css("a.view-articles::attr(href)").extract_first()
-        journal_main_page_link = response.urljoin(journal_main_page_link)
-        journal_summary["Journal_Main_Page_Link"] = journal_main_page_link
-
-        yield journal_summary
+        for (t, u, i) in zip(journal_titles, journal_urls, journal_issns):
+            yield {
+                'Journal_Title': t,
+                'Open_Access': None,
+                'Journal_Main_Page_Link': u,
+                'Journal_ISSN': i
+            }
