@@ -22,8 +22,10 @@ if __name__ == "__main__":
     parser.add_argument("-n", type=int, required=True, help="API key number")
     args = parser.parse_args()
 
-    db = SynDevAdmin.db_access()
+    db = SynDevAdmin.db_access() # 2022-02-22: KJC changed the local environmental variables to go to the SynPro DB
     db.connect()
+    # Below collections are from matgen MongoDB... not sure if able to access...
+    # pointing these to new collections in SynPro for testing.
     journal_col = db.collection("ElsevierJournals")
     paper_col = db.collection("ElsevierPapers_Update")
 
@@ -96,11 +98,11 @@ if __name__ == "__main__":
                         scraped_doc_num += 1
                     else:
                         missed_doc_num += 1
-        if paper_l:
-            paper_col.insert_many(paper_l)
-        journal_col.update({"_id": doc["_id"]}, {"$set": {"Crawled": True,
-                                                          # "Scraped_Doc": doc['Scraped_Doc'] + scraped_doc_num,
-                                                          # "Missed_Doc": doc["Missed_Doc"] + missed_doc_num
-                                                          }})
+        # if paper_l:
+        #     paper_col.insert_many(paper_l)
+        # journal_col.update({"_id": doc["_id"]}, {"$set": {"Crawled": True,
+        #                                                   # "Scraped_Doc": doc['Scraped_Doc'] + scraped_doc_num,
+        #                                                   # "Missed_Doc": doc["Missed_Doc"] + missed_doc_num
+        #                                                   }})
         print("Scraped {} papers, missed {} papers from {}.".format(scraped_doc_num, missed_doc_num,
                                                                     doc["Journal_Title"].encode('utf-8')))
