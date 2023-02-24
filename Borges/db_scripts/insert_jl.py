@@ -25,4 +25,5 @@ if __name__ == '__main__':
     with open(args.i, 'r') as jlf:
         for i, item in enumerate(json_lines.reader(jlf)):
             col.insert_one(item)
-            print(f'Inserted {i} journals to {col}', end='\r')
+            print(f'Inserted {i} journals to {args.c}', end='\r')
+    print()
