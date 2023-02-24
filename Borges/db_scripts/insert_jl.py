@@ -23,7 +23,11 @@ if __name__ == '__main__':
     col = db.collection(args.c)
 
     with open(args.i, 'r') as jlf:
+        unique_j_num = 0
         for i, item in enumerate(json_lines.reader(jlf)):
-            col.insert_one(item)
-            print(f'Inserted {i} journals to {args.c}', end='\r')
-    print()
+            if not col.find_one({'Journal_ISSN' : item['Journal_ISSN']}):
+                col.insert_one(item)
+                unique_j_num += 1
+                print(f'Inserted {unique_j_num} journals to {args.c}...', end='\r')
+
+    print(f'\n Inserted total of {i} journals to {args.c}')

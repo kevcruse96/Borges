@@ -29,7 +29,7 @@ if __name__ == "__main__":
     # Below collections are from matgen MongoDB... not sure if able to access...
     # pointing these to new collections in SynPro for testing.
     journal_col = db.collection("ElsevierJournals")
-    paper_col = db.collection("ElsevierPapers_Update")
+    paper_col = db.collection("ElsevierPapers_Meta")
 
     api_keys = {
         1: ELSEVIER_API_1,
@@ -39,10 +39,13 @@ if __name__ == "__main__":
     }
     client = ElsClient(api_keys[args.n])
 
-    while True:
-        doc = journal_col.find_one({"Journal_Title": "Microprocessors and Microsystems"})
-        if not doc:
-            break
+    # complete = True
+    # TODO: Get a way to flag if it was crawled (probably start from beginning and flag everything as 'Crawled': False
+    # TODO: Issue with Focus on Powder Coatings
+    for doc in journal_col.find({'Crawled' : False}):
+        # doc = journal_col.find_one({"Journal_Title": "Journal of Controlled Release"})
+        # if not doc:
+        #     break
         print("Searching for papers from {}".format(doc["Journal_Title"]))
 
         paper_l = []
@@ -60,6 +63,34 @@ if __name__ == "__main__":
 
             if search_success:
                 for res in doc_search.results:
+
+                    try:
+                        if res['prism:doi']:
+                            scraped_doc_num += 1
+                        else:
+                            missed_doc_num += 1
+                    except:
+                        pprint(res)
+                        stop
+                        print(f"Error querying {doc['Journal_Title']} for {year}")
+                        journal_col.update_one({"_id": doc["_id"]}, {"$set": {"Crawled": False,
+                                                                              f"Missed_{year}": True
+                                                                              }})
+                        break
+
+
+                    print("Scraped {} papers, missed {} papers from {} (2018 up to {}).".format(
+                        scraped_doc_num,
+                        missed_doc_num,
+                        doc["Journal_Title"],
+                        year
+                    ),
+                        end='\r'
+                    )
+
+                    # If this DOI already exists in paper metadata collection, do not insert
+                    if paper_col.find_one({'DOI' : res['prism:doi']}):
+                        continue
 
                     paper_sum = dict()
 
@@ -100,27 +131,18 @@ if __name__ == "__main__":
                     except:
                         paper_sum["Issue"] = None
 
-                    if paper_sum["DOI"]:
+                    if paper_sum['DOI']:
                         paper_l.append(paper_sum)
-                        scraped_doc_num += 1
-                    else:
-                        missed_doc_num += 1
 
-                    print("Scraped {} papers, missed {} papers from {} ({}).".format(
-                        scraped_doc_num,
-                        missed_doc_num,
-                        doc["Journal_Title"],
-                        year
-                    ),
-                        end='\r'
-                    )
         print('\n')
-        # if paper_l:
-        #     paper_col.insert_many(paper_l)
-        # journal_col.update({"_id": doc["_id"]}, {"$set": {"Crawled": True,
-        #                                                   # "Scraped_Doc": doc['Scraped_Doc'] + scraped_doc_num,
-        #                                                   # "Missed_Doc": doc["Missed_Doc"] + missed_doc_num
-        #                                                   }})
 
+        print(f'Dumping {len(paper_l)} papers from {doc["Journal_Title"]} into ElsevierPapers_Meta...')
 
-    pprint(paper_l)
+        if paper_l:
+            paper_col.insert_many(paper_l)
+
+            journal_col.update_one({"_id": doc["_id"]}, {"$set": {"Crawled": True,
+                                                          "Scraped_Doc": scraped_doc_num,
+                                                          "Missed_Doc": missed_doc_num
+                                                          }})
+        # complete = False

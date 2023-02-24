@@ -55,5 +55,6 @@ class ElsevierJournals(scrapy.Spider):
                 'Journal_Title': t,
                 'Open_Access': None,
                 'Journal_Main_Page_Link': u,
-                'Journal_ISSN': i
+                'Journal_ISSN': i,
+                'Crawled': False
             }
