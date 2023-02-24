@@ -13,7 +13,36 @@ __email__ = 'rongzq08@gmail.com'
 
 class ElsevierJournals(scrapy.Spider):
     name = "Elsevier_Journal"
-    start_urls = [f"https://www.elsevier.com/search-results?labels=journals&page={page}" for page in range(1, 3)]
+    start_urls = [f"https://www.elsevier.com/search-results?labels=journals&subject-0=27360&page={page}" for
+                  page in range(1, 17)
+                  ] + \
+                 [f"https://www.elsevier.com/search-results?labels=journals&subject-0=27362&page={page}" for
+                  page in range(1, 20)
+                  ] + \
+                 [f"https://www.elsevier.com/search-results?labels=journals&subject-0=27364&page={page}" for
+                  page in range(1, 16)
+                  ] + \
+                 [f"https://www.elsevier.com/search-results?labels=journals&subject-0=27366&page={page}" for
+                  page in range(1, 15)
+                  ] + \
+                 [f"https://www.elsevier.com/search-results?labels=journals&subject-0=27368&page={page}" for
+                  page in range(1, 11)
+                  ] + \
+                 [f"https://www.elsevier.com/search-results?labels=journals&subject-0=27370&page={page}" for
+                  page in range(1, 25)
+                  ] + \
+                 [f"https://www.elsevier.com/search-results?labels=journals&subject-0=27372&page={page}" for
+                  page in range(1, 14)
+                  ] + \
+                 [f"https://www.elsevier.com/search-results?labels=journals&subject-0=27374&page={page}" for
+                  page in range(1, 21)
+                  ] + \
+                 [f"https://www.elsevier.com/search-results?labels=journals&subject-0=27376&page={page}" for
+                  page in range(1, 15)
+                  ] + \
+                 [f"https://www.elsevier.com/search-results?labels=journals&subject-0=27378&page={page}" for
+                  page in range(1, 18)
+                  ]
 
     def parse(self, response):
         journal_titles = response.css('.search-result-title a::text').extract()
