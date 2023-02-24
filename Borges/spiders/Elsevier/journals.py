@@ -8,8 +8,8 @@ from bs4 import BeautifulSoup
 import scrapy
 
 __author__ = 'Ziqin (Shaun) Rong'
-__maintainer__ = 'Ziqin (Shaun) Rong'
-__email__ = 'rongzq08@gmail.com'
+__maintainer__ = 'Kevin Cruse'
+__email__ = 'kevcruse96@gmail.com'
 
 class ElsevierJournals(scrapy.Spider):
     name = "Elsevier_Journal"
@@ -56,5 +56,7 @@ class ElsevierJournals(scrapy.Spider):
                 'Open_Access': None,
                 'Journal_Main_Page_Link': u,
                 'Journal_ISSN': i,
-                'Crawled': False
+                'Years_Crawled': False,
+                'Indexed_Num': 0,
+                'Missed_Num': 0
             }

@@ -15,8 +15,8 @@ from Borges.settings import ELSEVIER_API_1, ELSEVIER_API_2, ELSEVIER_API_3, ELSE
 from pprint import pprint
 
 __author__ = 'Ziqin (Shaun) Rong'
-__maintainer__ = 'Ziqin (Shaun) Rong'
-__email__ = 'rongzq08@gmail.com'
+__maintainer__ = 'Kevin Cruse'
+__email__ = 'kevcruse96@gmail.com'
 
 
 if __name__ == "__main__":
@@ -40,21 +40,19 @@ if __name__ == "__main__":
     client = ElsClient(api_keys[args.n])
 
     # complete = True
-    # TODO: Get a way to flag if it was crawled (probably start from beginning and flag everything as 'Crawled': False
-    # TODO: Issue with Focus on Powder Coatings
-    for doc in journal_col.find({'Crawled' : False}):
+    for doc in journal_col.find({'Crawled': False}):
         # doc = journal_col.find_one({"Journal_Title": "Journal of Controlled Release"})
         # if not doc:
         #     break
         print("Searching for papers from {}".format(doc["Journal_Title"]))
 
         paper_l = []
-        scraped_doc_num = 0
+        indexed_doc_num = 0
         missed_doc_num = 0
 
-        for year in range(2018, 2023):
+        for year in range(2018, 2024):
             print()
-            doc_search = ElsSearch('ISSN({}) AND PUBYEAR = {}'.format(doc["Journal_ISSN"], year), 'scopus') # Note this was really tricky to find... there needs to be spaces between the qualifying and "PUBYEAR"/year... also need to use 'scopus' instead of 'scidir'
+            doc_search = ElsSearch('ISSN({}) AND PUBYEAR = {}'.format(doc["Journal_ISSN"], year), 'scopus') # Note this was pretty tricky to find... there needs to be spaces between the qualifying and "PUBYEAR"/year... also need to use 'scopus' instead of 'scidir'
             search_success = True
             try:
                 doc_search.execute(client, get_all=True)
@@ -66,21 +64,16 @@ if __name__ == "__main__":
 
                     try:
                         if res['prism:doi']:
-                            scraped_doc_num += 1
+                            indexed_doc_num += 1
                         else:
                             missed_doc_num += 1
                     except:
-                        pprint(res)
-                        stop
                         print(f"Error querying {doc['Journal_Title']} for {year}")
-                        journal_col.update_one({"_id": doc["_id"]}, {"$set": {"Crawled": False,
-                                                                              f"Missed_{year}": True
-                                                                              }})
                         break
 
 
-                    print("Scraped {} papers, missed {} papers from {} (2018 up to {}).".format(
-                        scraped_doc_num,
+                    print("Indexed {} papers, missed {} papers from {} (2018 up to {}).".format(
+                        indexed_doc_num,
                         missed_doc_num,
                         doc["Journal_Title"],
                         year
@@ -142,7 +135,7 @@ if __name__ == "__main__":
             paper_col.insert_many(paper_l)
 
             journal_col.update_one({"_id": doc["_id"]}, {"$set": {"Crawled": True,
-                                                          "Scraped_Doc": scraped_doc_num,
+                                                          "Indexed_Doc": indexed_doc_num,
                                                           "Missed_Doc": missed_doc_num
                                                           }})
         # complete = False

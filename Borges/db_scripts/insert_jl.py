@@ -8,8 +8,8 @@ import json_lines
 from DBGater.db_singleton_mongo import SynDevAdmin
 
 __author__ = 'Ziqin (Shaun) Rong'
-__maintainer__ = 'Ziqin (Shaun) Rong'
-__email__ = 'rongzq08@gmail.com'
+__maintainer__ = 'Kevin Cruse'
+__email__ = 'kevcruse96@gmail.com'
 
 
 if __name__ == '__main__':

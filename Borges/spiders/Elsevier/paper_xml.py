@@ -12,8 +12,8 @@ from pymongo.errors import DocumentTooLarge
 from Borges.settings import ELSEVIER_API_1, ELSEVIER_API_2, ELSEVIER_API_3, ELSEVIER_API_4
 
 __author__ = 'Ziqin (Shaun) Rong'
-__maintainer__ = 'Ziqin (Shaun) Rong'
-__email__ = 'rongzq08@gmail.com'
+__maintainer__ = 'Kevin Cruse'
+__email__ = 'kevcruse96@gmail.com'
 
 
 def scrape_paper(wait_time, col, api_key):
