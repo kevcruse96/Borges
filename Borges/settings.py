@@ -17,7 +17,7 @@ SPIDER_MODULES = ['Borges.spiders']
 NEWSPIDER_MODULE = 'Borges.spiders'
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
-USER_AGENT = 'CederGroup@berkeley; TDM Account number: 1351332'
+USER_AGENT = 'CederGroup@berkeley' #'; TDM Account number: 1351332'
 
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = False
@@ -65,9 +65,9 @@ DOWNLOAD_DELAY = 1
 
 # Configure item pipelines
 # See https://doc.scrapy.org/en/latest/topics/item-pipeline.html
-ITEM_PIPELINES = {
-   'Borges.pipelines.BorgesPipeline': 300,
-}
+# ITEM_PIPELINES = {
+#    'Borges.pipelines.BorgesPipeline': 300,
+# }
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://doc.scrapy.org/en/latest/topics/autothrottle.html
@@ -90,7 +90,8 @@ ITEM_PIPELINES = {
 # HTTPCACHE_IGNORE_HTTP_CODES = []
 # HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
 
-SPLASH_URL = 'http://192.168.99.100:8050'
+#SPLASH_URL = 'http://192.168.99.100:8050'
+SPLASH_URL = 'http://localhost:8050'
 DOWNLOADER_MIDDLEWARES = {
     'scrapy_splash.SplashCookiesMiddleware': 723,
     'scrapy_splash.SplashMiddleware': 725,

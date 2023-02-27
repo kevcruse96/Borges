@@ -11,10 +11,11 @@ import yaml
 from scrapy_splash import SplashRequest
 from bs4 import BeautifulSoup
 from random import randint
+from pprint import pprint
 
 __author__ = 'Ziqin (Shaun) Rong'
-__maintainer__ = 'Ziqin (Shaun) Rong'
-__email__ = 'rongzq08@gmail.com'
+__maintainer__ = 'Kevin Cruse'
+__email__ = 'kevcruse96@gmail.com'
 
 
 class RSCAnalystSpider(scrapy.Spider):
@@ -23,8 +24,8 @@ class RSCAnalystSpider(scrapy.Spider):
     http_user = 'user'
     http_pass = 'userpass'
 
-    with open(os.path.join(os.path.dirname(__file__), 'start_urls.yaml'), 'r') as yf:
-        url_yaml = yaml.load(yf)
+    with open(os.path.join(os.path.dirname(__file__), 'start_urls_20230226.yaml'), 'r') as yf:
+        url_yaml = yaml.safe_load(yf)
 
     start_urls = url_yaml[name]
 
@@ -33,7 +34,7 @@ class RSCAnalystSpider(scrapy.Spider):
     exclude_article_types = ["Cover", "Front/Back Matter"]
 
     def start_requests(self):
-        for url in self.start_urls:
+        for url in self.start_urls[:1]:
             url = str(url)
             yield SplashRequest(url, self.parse, args={'wait': 2})
 
@@ -88,9 +89,10 @@ class RSCAnalystSpider(scrapy.Spider):
                                   'html.parser').get_text().strip()
 
             abstract = BeautifulSoup(response.css("div.capsule__text").extract_first(), 'html.parser').get_text().strip()
-
-            item = response.css("div.list__item--dashed")[1]
-            doi = BeautifulSoup(item.css('span.list__item-data').extract_first(), 'html.parser').get_text().strip()
+            # item = response.css("div.list__item--dashed")[1]
+            # doi = BeautifulSoup(item.css('span.list__item-data').extract_first(), 'html.parser').get_text().strip()
+            doi_url = BeautifulSoup(response.css("dd.c__24 > a.text--small").extract_first(), 'html.parser').get_text().strip()
+            doi = doi_url.split('.org/')[1]
 
             article_html_link = response.css("a.btn-icon--download+.btn--stack::attr(href)").extract_first()
             article_html_link = response.urljoin(article_html_link)
@@ -111,5 +113,5 @@ class RSCAnalystSpider(scrapy.Spider):
             meta_data = response.meta['meta_info']
             results.update(meta_data)
             yield results
-        except:
+        except Exception as e:
             pass
