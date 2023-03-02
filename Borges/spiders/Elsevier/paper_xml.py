@@ -28,18 +28,15 @@ def scrape_paper(wait_time, col, api_key):
                                                                                                     api_key))
     if res.status_code == 200:
         try:
-            paper_col.update({'_id': doc["_id"]}, {"$set": {"Paper_Content": res.content, "Crawled": True,
-                                                            "Crawled_2": True}})
+            paper_col.update({'_id': doc["_id"]}, {"$set": {"Paper_Content": res.content, "Crawled": True, "Error": None}})
             print("Successfully Download Paper {}.".format(doc["DOI"]))
         except DocumentTooLarge:
             paper_col.update({'_id': doc['_id']}, {"$set": {"Error": "pymongo.errors.DocumentTooLarge",
-                                                            "Crawled": True,
-                                                            "Crawled_2": True}})
+                                                            "Crawled": True}})
             print("Document Too Large Error for Paper {}".format(doc['DOI']))
     elif res.status_code == 400:
         paper_col.update({'_id': doc['_id']}, {"$set": {"Error": "Bad Request Code",
-                                                        "Crawled": True,
-                                                        "Crawled_2": True}})
+                                                        "Crawled": True}})
         print("Bad request URL for Paper {}".format(doc['DOI']))
     else:
         print("Response Code: {}.".format(res.status_code))
