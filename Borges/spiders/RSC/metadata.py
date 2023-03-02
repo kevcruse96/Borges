@@ -34,7 +34,7 @@ class RSCAnalystSpider(scrapy.Spider):
     exclude_article_types = ["Cover", "Front/Back Matter"]
 
     def start_requests(self):
-        for url in self.start_urls[:1]:
+        for url in self.start_urls:
             url = str(url)
             yield SplashRequest(url, self.parse, args={'wait': 2})
 
