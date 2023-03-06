@@ -22,7 +22,7 @@ class RSCPaperSpider(scrapy.Spider):
 
     db = SynDevAdmin.db_access()
     db.connect()
-    col = db.collection('RSC')
+    col = db.collection('RSCPapers')
 
     def start_requests(self):
         for doc in self.col.find({'HTML_Crawled': False}):
@@ -34,11 +34,11 @@ class RSCPaperSpider(scrapy.Spider):
         try:
             html = response.css('div#wrapper').extract_first()
             if html:
-                self.col.update({"DOI": response.meta['DOI']}, {'$set': {'HTML_Crawled': True,
+                self.col.update_one({"DOI": response.meta['DOI']}, {'$set': {'HTML_Crawled': True,
                                                                          "Paper_Content_HTML": html}})
             else:
-                self.col.update({"DOI": response.meta['DOI']}, {'$set': {'HTML_Crawled': False,
+                self.col.update_one({"DOI": response.meta['DOI']}, {'$set': {'HTML_Crawled': False,
                                                                          'Error_Msg': "HTML string is None"}})
         except Exception as e:
-            self.col.update({"DOI": response.meta['DOI']}, {'$set': {'HTML_Crawled': False,
+            self.col.update_one({"DOI": response.meta['DOI']}, {'$set': {'HTML_Crawled': False,
                                                                      'Error_Msg': str(e)}})

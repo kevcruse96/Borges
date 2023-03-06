@@ -23,5 +23,7 @@ if __name__ == '__main__':
     col = db.collection(args.c)
 
     for doc in col.find():
-        if 'Crawled' not in doc.keys() or doc['Crawled']:
-            col.update({'_id': doc['_id']}, {'$set': {'Crawled': False}})
+        if 'HTML_Crawled' not in doc.keys() or doc['HTML_Crawled']:
+            col.update_one({'_id': doc['_id']}, {'$set': {'HTML_Crawled': False}})
+        elif 'Crawled' in doc.keys():
+            col.update_one({'_id': doc['_id']}, {'$rename': {'Crawled': 'HTML_Crawled'}})
