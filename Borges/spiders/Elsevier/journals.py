@@ -3,6 +3,8 @@
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
+import os
+import json_lines
 from bs4 import BeautifulSoup
 
 import scrapy
@@ -11,8 +13,15 @@ __author__ = 'Ziqin (Shaun) Rong'
 __maintainer__ = 'Kevin Cruse'
 __email__ = 'kevcruse96@gmail.com'
 
+if os.path.isfile('./journals.jl'):
+    journal_meta_list = [item for item in json_lines.reader(open('./journals.jl'), 'r')]
+else:
+    journal_meta_list = []
+
 class ElsevierJournals(scrapy.Spider):
     name = "Elsevier_Journal"
+    # Add functionality for either automatic checking of page range OR just cycle until an error below
+
     start_urls = [f"https://www.elsevier.com/search-results?labels=journals&subject-0=27360&page={page}" for
                   page in range(1, 17)
                   ] + \
@@ -51,13 +60,14 @@ class ElsevierJournals(scrapy.Spider):
         journal_issns = response.css('.journal-result-issn *::text').extract() # ISSNs were not extracted in previous version... not sure when they were grabbed before
 
         for (t, u, i) in zip(journal_titles, journal_urls, journal_issns):
-            yield {
+            journal_meta = {
                 'Journal_Title': t,
                 'Open_Access': None,
                 'Journal_Main_Page_Link': u,
                 'Journal_ISSN': i,
                 'Years_Indexed': [],
-                'Years_Crawled': [],
-                'Indexed_Doc': 0,
-                'Missed_Doc': 0
+                'Years_Crawled': []
             }
+            if journal_meta not in journal_meta_list:
+                journal_meta_list.append(journal_meta)
+                yield journal_meta

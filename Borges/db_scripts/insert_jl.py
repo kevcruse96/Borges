@@ -25,9 +25,16 @@ if __name__ == '__main__':
     with open(args.i, 'r') as jlf:
         unique_j_num = 0
         for i, item in enumerate(json_lines.reader(jlf)):
-            if not col.find_one({'Journal_ISSN' : item['Journal_ISSN']}): # TODO: more robust checks?
+            if 'DOI' in item.keys():
+                dup_key = 'DOI'
+            elif 'Journal_ISSN' in item.keys():
+                dup_key = 'Journal_ISSN'
+            else:
+                print("Please add appropriate key to check for duplicates")
+                continue
+            if not col.find_one({dup_key : item[dup_key]}):
                 col.insert_one(item)
                 unique_j_num += 1
-                print(f'Inserted {unique_j_num} journals to {args.c}...', end='\r')
+                print(f'Inserted {unique_j_num} items to {args.c}...', end='\r')
 
-    print(f'\n Inserted total of {unique_j_num} journals to {args.c}')
+    print(f'\n Inserted total of {unique_j_num} items to {args.c}')

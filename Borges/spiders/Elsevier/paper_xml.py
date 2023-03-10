@@ -28,14 +28,14 @@ def scrape_paper(wait_time, col, api_key):
                                                                                                     api_key))
     if res.status_code == 200:
         try:
-            paper_col.update({'_id': doc["_id"]}, {"$set": {"Paper_Content": res.content, "Crawled": True, "Error": None}})
+            paper_col.update_one({'_id': doc["_id"]}, {"$set": {"Paper_Content": res.content, "Crawled": True, "Error": None}})
             print("Successfully Download Paper {}.".format(doc["DOI"]))
         except DocumentTooLarge:
-            paper_col.update({'_id': doc['_id']}, {"$set": {"Error": "pymongo.errors.DocumentTooLarge",
+            paper_col.update_one({'_id': doc['_id']}, {"$set": {"Error": "pymongo.errors.DocumentTooLarge",
                                                             "Crawled": True}})
             print("Document Too Large Error for Paper {}".format(doc['DOI']))
     elif res.status_code == 400:
-        paper_col.update({'_id': doc['_id']}, {"$set": {"Error": "Bad Request Code",
+        paper_col.update_one({'_id': doc['_id']}, {"$set": {"Error": "Bad Request Code",
                                                         "Crawled": True}})
         print("Bad request URL for Paper {}".format(doc['DOI']))
     else:
@@ -48,6 +48,9 @@ if __name__ == '__main__':
     db = SynDevAdmin.db_access()
     db.connect()
     paper_col = db.collection("ElsevierPapers")
+    journal_col = db.collection("ElsevierJournals")
+
+    # TODO: add portion to update Years_Crawled field in Elsevier Journals? Maybe just get rid of that field
 
     while True:
         continue_l = []

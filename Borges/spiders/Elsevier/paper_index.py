@@ -12,36 +12,59 @@ from elsapy.elssearch import ElsSearch
 
 from Borges.settings import ELSEVIER_API_1, ELSEVIER_API_2, ELSEVIER_API_3, ELSEVIER_API_4
 
+from datetime import datetime
+
 from pprint import pprint
 
 __author__ = 'Ziqin (Shaun) Rong'
 __maintainer__ = 'Kevin Cruse'
 __email__ = 'kevcruse96@gmail.com'
 
+db = SynDevAdmin.db_access()  # 2023-02-22: KJC changed the local environmental variables to go to the SynPro DB
+db.connect()
+# Below collections are from matgen MongoDB... not sure if able to access...
+# pointing these to new collections in SynPro for testing.
+journal_col = db.collection("ElsevierJournals")
+paper_col = db.collection("ElsevierPapers")
+
 # TODO: ensure that the cursor isn't lost (perhaps there's a better way... maybe create a function and pass in list of journal titles, then just ".find_one({})")
 
-def index_papers_by_journal_year(journal_doc, first_year, final_year):
+def index_papers_by_journal_year(journal_title, first_year, final_year, mongo_insert=False, mongo_update=False):
+    journal_doc = journal_col.find_one({'Journal_Title': journal_title})
     if not journal_doc:
         return
 
-    # TODO: add a field for partially indexed years
+    # TODO: add a field for partially indexed years, like current year
     # Check to see what the last year indexed was
     years_indexed = journal_doc['Years_Indexed']
     if years_indexed:
-        if sorted(years_indexed)[-1] != final_year - 1:
-            first_year_upd = sorted(years_indexed)[-1] + 1
+        years_sorted = sorted([y['Year'] for y in years_indexed])
+        if years_sorted[-1] != final_year - 1:
+            first_year_upd = years_sorted[-1] + 1
         else:
             return
     else:
         first_year_upd = first_year
 
     print(f"Searching for papers from {journal_doc['Journal_Title']} ({first_year_upd}-{final_year - 1})")
+
     paper_l = []
-    indexed_doc_num = journal_doc['Indexed_Doc']
-    missed_doc_num = journal_doc['Missed_Doc']
+    if paper_col.find_one({'Journal': journal_title}):
+        indexed_dois = [p['DOI'] for p in paper_col.find({'Journal': journal_title})]
+    else:
+        indexed_dois = []
 
     for year in range(first_year_upd, final_year):
+
         print()
+
+        current_year = False
+        if year == final_year:
+            current_year = True
+
+        indexed_doc_num = 0
+        missed_doc_num = 0
+
         # Below is a slow step for large queries
         # TODO: add more query endpoints (e.g. keywords)
         # TODO: some journals (e.g. Focus on Powder Coatings) are not accessible by Scopus, but are by ScienceDirect... so we do need scidir
@@ -53,20 +76,24 @@ def index_papers_by_journal_year(journal_doc, first_year, final_year):
             doc_search.execute(client, get_all=True)
         except:
             search_success = False
+            print('Could not execute query using elsapy client')
 
         if search_success:
             for res in doc_search.results:
 
                 try:
-                    if res['prism:doi']:
+                    if 'prism:doi' in res.keys():
+                        # If this DOI already exists in paper metadata collection, do not insert
+                        if res['prism:doi'] in indexed_dois:
+                            continue
                         indexed_doc_num += 1 # might be to early to call here
                     else:
                         missed_doc_num += 1
                 except:
+                    # TODO: add flag to journal collection item if this happens
                     print(f"Error querying {journal_doc['Journal_Title']} for {year}")
                     print('Result: ', res)
                     break
-
 
                 print("Indexed {} papers, missed {} papers from {} ({} up thru {}).".format(
                     indexed_doc_num,
@@ -78,10 +105,6 @@ def index_papers_by_journal_year(journal_doc, first_year, final_year):
                     end='\r'
                 )
 
-                # If this DOI already exists in paper metadata collection, do not insert
-                if paper_col.find_one({'DOI' : res['prism:doi']}):
-                    continue
-
                 paper_sum = dict()
 
                 # Note that after python 3, all strings are unicode so the 'u' prefix is not necessary
@@ -90,8 +113,8 @@ def index_papers_by_journal_year(journal_doc, first_year, final_year):
                 paper_sum["Publisher"] = "Elsevier" # this was under the subsequent "except" level... not sure why
                 paper_sum["Journal"] = journal_doc["Journal_Title"]
 
-                # TODO: maybe grab  some of the included links (like cited by)
-                # Keep in mind: try to kee p original
+                # TODO: maybe grab some of the included links (like cited by)
+                # Keep in mind: try to keep original format and add on top of it
 
                 # TODO: grab the year as a timestamp rather than just the published year (good to have more info)
 
@@ -107,6 +130,7 @@ def index_papers_by_journal_year(journal_doc, first_year, final_year):
 
                 try:
                     paper_sum["DOI"] = res['prism:doi']
+                    indexed_dois.append(res['prism:doi'])
                 except:
                     paper_sum["DOI"] = None
 
@@ -132,7 +156,15 @@ def index_papers_by_journal_year(journal_doc, first_year, final_year):
                 if paper_sum['DOI']:
                     paper_l.append(paper_sum)
 
-            years_indexed.append(year)
+        year_meta = {
+            'Year': year,
+            'Current_Year': current_year,
+            'Search_Success': search_success,
+            'Indexed_Doc_Num': indexed_doc_num,
+            'Missed_Doc_Num': missed_doc_num
+        }
+
+        years_indexed.append(year_meta)
 
     print('\n')
 
@@ -140,13 +172,15 @@ def index_papers_by_journal_year(journal_doc, first_year, final_year):
 
     # TODO: Would be nice to have a way to know for certain that we don't already have the paper, then insert it
     if paper_l:
-        paper_col.insert_many(paper_l)
+        if mongo_insert:
+            paper_col.insert_many(paper_l)
 
-        journal_col.update_one({"_id": journal_doc["_id"]}, {"$set": {
-            "Years_Indexed": years_indexed,
-            "Indexed_Doc": indexed_doc_num,
-            "Missed_Doc": missed_doc_num
-        }})
+        if mongo_update:
+            journal_col.update_one({"_id": journal_doc["_id"]}, {"$set": {
+                "Years_Indexed": year_metas,
+                "Indexed_Doc": indexed_doc_num,
+                "Missed_Doc": missed_doc_num
+            }})
 
     return
 
@@ -154,13 +188,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", type=int, required=True, help="API key number")
     args = parser.parse_args()
-
-    db = SynDevAdmin.db_access()  # 2023-02-22: KJC changed the local environmental variables to go to the SynPro DB
-    db.connect()
-    # Below collections are from matgen MongoDB... not sure if able to access...
-    # pointing these to new collections in SynPro for testing.
-    journal_col = db.collection("ElsevierJournals")
-    paper_col = db.collection("ElsevierPapers")
 
     # TODO: find a way to check rate limits (here's a start: https://dev.elsevier.com/api_key_settings.html)
     api_keys = {
@@ -172,11 +199,13 @@ if __name__ == "__main__":
     client = ElsClient(api_keys[args.n])
 
     # TODO: add as a command line argument, not hardcoded into script
-    first_year = 2018
+    first_year = 2000
     final_year = 2024
 
-    for journal_doc in journal_col.find({}):
-        index_papers_by_journal_year(journal_doc, first_year, final_year)
+    # TODO: Make the loop a list of all the journal names
+    journal_titles = [d['Journal_Title'] for d in journal_col.find({})]
+    for journal_title in journal_titles:
+        index_papers_by_journal_year(journal_title, first_year, final_year)
 
     
 
