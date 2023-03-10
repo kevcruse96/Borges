@@ -26,8 +26,55 @@ db.connect()
 # pointing these to new collections in SynPro for testing.
 journal_col = db.collection("ElsevierJournals")
 paper_col = db.collection("ElsevierPapers")
+missed_paper_col = db.collection("ElsevierPapers_missed")
 
-# TODO: ensure that the cursor isn't lost (perhaps there's a better way... maybe create a function and pass in list of journal titles, then just ".find_one({})")
+def parse_doc_search_result(res, journal_doc):
+
+    paper_sum = dict()
+
+    # Note that after python 3, all strings are unicode so the 'u' prefix is not necessary
+
+    paper_sum['Crawled'] = False
+    paper_sum["Publisher"] = "Elsevier"  # this was under the subsequent "except" level... not sure why
+    paper_sum["Journal"] = journal_doc["Journal_Title"]
+
+    # TODO: grab the year as a timestamp rather than just the published year (good to have more info)
+
+    try:
+        paper_sum['Published_Year'] = int(res['prism:coverDate'].split('-')[0])
+    except:
+        paper_sum["Published_Year"] = None
+
+    try:
+        paper_sum["Open_Access"] = res['openaccessFlag']
+    except:
+        paper_sum["Open_Access"] = False
+
+    try:
+        paper_sum["DOI"] = res['prism:doi']
+    except:
+        paper_sum["DOI"] = None
+
+    try:
+        paper_sum["Title"] = res['dc:title']
+    except:
+        paper_sum["Title"] = None
+
+    # TODO: will need to find another way to get author and issue if using Scopus
+    # TODO: can we get ORCID
+    try:
+        paper_sum["Authors"] = ["{} {}".format(ath[u'given-name'].encode("utf-8"),
+                                               ath[u'surname'].encode("utf-8"))
+                                for ath in res[u'authors'][u'author']]
+    except:
+        paper_sum["Authors"] = None
+
+    try:
+        paper_sum["Issue"] = int(res[u'prism:issueIdentifier'].encode("utf-8"))
+    except:
+        paper_sum["Issue"] = None
+
+    return paper_sum
 
 def index_papers_by_journal_year(journal_title, first_year, final_year, mongo_insert=False, mongo_update=False):
     journal_doc = journal_col.find_one({'Journal_Title': journal_title})
@@ -46,24 +93,30 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, mongo_in
     else:
         first_year_upd = first_year
 
-    print(f"Searching for papers from {journal_doc['Journal_Title']} ({first_year_upd}-{final_year - 1})")
+    print(f"========Searching for papers from {journal_doc['Journal_Title']} ({first_year_upd}-{final_year - 1})========\n")
 
     paper_l = []
+    missed_paper_l = []
+
+
     if paper_col.find_one({'Journal': journal_title}):
-        indexed_dois = [p['DOI'] for p in paper_col.find({'Journal': journal_title})]
+        indexed_docs = [p for p in paper_col.find({'Journal': journal_title})]
     else:
-        indexed_dois = []
+        indexed_docs = []
+
+    if missed_paper_col.find_one({'Journal': journal_title}):
+        missed_docs = [p for p in missed_paper_col.find({'Journal': journal_title})]
+    else:
+        missed_docs = []
 
     for year in range(first_year_upd, final_year):
 
-        print()
+        year_indexed_doc_num = 0
+        year_missed_doc_num = 0
 
         current_year = False
-        if year == final_year:
+        if year == final_year-1:
             current_year = True
-
-        indexed_doc_num = 0
-        missed_doc_num = 0
 
         # Below is a slow step for large queries
         # TODO: add more query endpoints (e.g. keywords)
@@ -76,111 +129,65 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, mongo_in
             doc_search.execute(client, get_all=True)
         except:
             search_success = False
-            print('Could not execute query using elsapy client')
 
         if search_success:
-            for res in doc_search.results:
+            if doc_search.results == [{'@_fa': 'true', 'error': 'Result set was empty'}]:
+                print("Search was successful but result set was empty for {}".format(year))
+                search_success = False
+            else:
+                for res in doc_search.results:
 
-                try:
-                    if 'prism:doi' in res.keys():
-                        # If this DOI already exists in paper metadata collection, do not insert
-                        if res['prism:doi'] in indexed_dois:
-                            continue
-                        indexed_doc_num += 1 # might be to early to call here
+                    paper_sum = parse_doc_search_result(res, journal_doc)
+
+                    if paper_sum['DOI']:
+                        indexed_docs.append(paper_sum)
+                        paper_l.append(paper_sum)
+                        year_indexed_doc_num += 1
                     else:
-                        missed_doc_num += 1
-                except:
-                    # TODO: add flag to journal collection item if this happens
-                    print(f"Error querying {journal_doc['Journal_Title']} for {year}")
-                    print('Result: ', res)
-                    break
+                        missed_docs.append(paper_sum)
+                        missed_paper_l.append(paper_sum)
+                        year_missed_doc_num += 1
 
-                print("Indexed {} papers, missed {} papers from {} ({} up thru {}).".format(
-                    indexed_doc_num,
-                    missed_doc_num,
+                print("Search success for from {} ({} up thru {})!\nIndexed {} new papers\nMissed {} new papers ".format(
                     journal_doc["Journal_Title"],
                     first_year_upd,
-                    year
+                    year,
+                    year_indexed_doc_num,
+                    year_missed_doc_num
                 ),
                     end='\r'
                 )
+        else:
+            print("Search failure for {} in {}".format(journal_doc['Journal_Title'], year))
 
-                paper_sum = dict()
-
-                # Note that after python 3, all strings are unicode so the 'u' prefix is not necessary
-
-                paper_sum['Crawled'] = False
-                paper_sum["Publisher"] = "Elsevier" # this was under the subsequent "except" level... not sure why
-                paper_sum["Journal"] = journal_doc["Journal_Title"]
-
-                # TODO: maybe grab some of the included links (like cited by)
-                # Keep in mind: try to keep original format and add on top of it
-
-                # TODO: grab the year as a timestamp rather than just the published year (good to have more info)
-
-                try:
-                    paper_sum['Published_Year'] = int(res['prism:coverDate'].split('-')[0])
-                except:
-                    paper_sum["Published_Year"] = None
-
-                try:
-                    paper_sum["Open_Access"] = res['openaccessFlag']
-                except:
-                    paper_sum["Open_Access"] = False
-
-                try:
-                    paper_sum["DOI"] = res['prism:doi']
-                    indexed_dois.append(res['prism:doi'])
-                except:
-                    paper_sum["DOI"] = None
-
-                try:
-                    paper_sum["Title"] = res['dc:title']
-                except:
-                    paper_sum["Title"] = None
-
-                # TODO: will need to find another way to get author and issue if using Scopus
-                # TODO: can we get ORCID
-                try:
-                    paper_sum["Authors"] = ["{} {}".format(ath[u'given-name'].encode("utf-8"),
-                                                           ath[u'surname'].encode("utf-8"))
-                                            for ath in res[u'authors'][u'author']]
-                except:
-                    paper_sum["Authors"] = None
-
-                try:
-                    paper_sum["Issue"] = int(res[u'prism:issueIdentifier'].encode("utf-8"))
-                except:
-                    paper_sum["Issue"] = None
-
-                if paper_sum['DOI']:
-                    paper_l.append(paper_sum)
-
+        print('\n\n')
         year_meta = {
             'Year': year,
             'Current_Year': current_year,
             'Search_Success': search_success,
-            'Indexed_Doc_Num': indexed_doc_num,
-            'Missed_Doc_Num': missed_doc_num
+            'Indexed_Doc_Num': year_indexed_doc_num,
+            'Missed_Doc_Num': year_missed_doc_num,
+            'last_updated': datetime.utcnow()
         }
 
         years_indexed.append(year_meta)
 
-    print('\n')
+    # TODO: move dumping inside year-by-year loop?
 
     print(f'Dumping {len(paper_l)} papers from {journal_doc["Journal_Title"]} into ElsevierPapers...\n')
 
     # TODO: Would be nice to have a way to know for certain that we don't already have the paper, then insert it
-    if paper_l:
-        if mongo_insert:
-            paper_col.insert_many(paper_l)
 
-        if mongo_update:
-            journal_col.update_one({"_id": journal_doc["_id"]}, {"$set": {
-                "Years_Indexed": year_metas,
-                "Indexed_Doc": indexed_doc_num,
-                "Missed_Doc": missed_doc_num
-            }})
+    if mongo_insert:
+        if paper_l:
+            paper_col.insert_many(paper_l)
+        if missed_paper_l:
+            missed_paper_col.insert_many(missed_paper_l)
+
+    if mongo_update:
+        journal_col.update_one({"_id": journal_doc["_id"]}, {"$set": {
+            "Years_Indexed": years_indexed
+        }})
 
     return
 
@@ -205,10 +212,10 @@ if __name__ == "__main__":
     # TODO: Make the loop a list of all the journal names
     journal_titles = [d['Journal_Title'] for d in journal_col.find({})]
     for journal_title in journal_titles:
-        index_papers_by_journal_year(journal_title, first_year, final_year)
-
-    
-
-    # SCRATCH
-    # for doc in journal_col.find({'Years_Indexed': {'$not': {'$all': [y for y in range(first_year, final_year)]}}}):
-    # not_complete = False
+        index_papers_by_journal_year(
+            journal_title,
+            first_year,
+            final_year,
+            mongo_insert=True,
+            mongo_update=True
+        )
