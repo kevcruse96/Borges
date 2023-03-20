@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
     for journal_title in journal_list:
 
-        paper_l = []
+        total_papers_indexed = 0
 
         for year in range(2000, 2024):
 
@@ -55,6 +55,9 @@ if __name__ == "__main__":
 
             if 'Years_Indexed' in journal.keys():
                 if year in [y['Year'] for y in journal['Years_Indexed']]:
+                    total_papers_indexed += [
+                        y['Indexed_Doc_Num'] for y in journal['Years_Indexed'] if y['Year'] == year
+                    ][0]
                     continue
             else:
                 journal_col.update_one({"_id": journal["_id"]}, {"$set": {
@@ -95,6 +98,7 @@ if __name__ == "__main__":
                             tick -= 1
                         continue
                     else:
+                        print()
                         print(articles_query)
                         stop
 
@@ -116,13 +120,13 @@ if __name__ == "__main__":
                 num_results = len(articles)
 
                 year_papers.extend(articles)
-                paper_l.extend(articles)
 
+                total_papers_indexed += num_results
                 year_indexed_doc_num += num_results
                 page += 1
 
                 print(
-                    f'Indexed {year_indexed_doc_num} papers from {journal_title} for {year} ({len(paper_l)} total)',
+                    f'Indexed {year_indexed_doc_num} papers from {journal_title} for {year} ({total_papers_indexed} total)',
                     end='\r'
                 )
 
