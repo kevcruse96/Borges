@@ -99,8 +99,9 @@ class RSCAnalystSpider(scrapy.Spider):
             article_pdf_link = response.css("a.btn-icon--download::attr(href)").extract_first()
             article_pdf_link = response.urljoin(article_pdf_link)
 
+            # TODO: junk is being extracted here too
             authors = []
-            for author in response.css('label').extract():
+            for author in response.css('label.input__label').extract():
                 authors.append(BeautifulSoup(author, 'html.parser').get_text().strip())
 
             results = {"Title": title,

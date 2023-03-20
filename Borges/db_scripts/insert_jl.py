@@ -25,10 +25,12 @@ if __name__ == '__main__':
     with open(args.i, 'r') as jlf:
         unique_j_num = 0
         for i, item in enumerate(json_lines.reader(jlf)):
-            if 'DOI' in item.keys():
+            if 'DOI' in item.keys(): # for RSC
                 dup_key = 'DOI'
-            elif 'Journal_ISSN' in item.keys():
+            elif 'Journal_ISSN' in item.keys(): # for Elsevier
                 dup_key = 'Journal_ISSN'
+            elif 'Journal_Title' in item.keys(): # for AIP
+                dup_key = 'Journal_Title'
             else:
                 print("Please add appropriate key to check for duplicates")
                 continue

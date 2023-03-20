@@ -10,7 +10,16 @@ from DBGater.db_singleton_mongo import SynDevAdmin
 from elsapy.elsclient import ElsClient
 from elsapy.elssearch import ElsSearch
 
-from Borges.settings import ELSEVIER_API_1, ELSEVIER_API_2, ELSEVIER_API_3, ELSEVIER_API_4
+from Borges.settings import (
+    ELSEVIER_API_1,
+    ELSEVIER_API_2,
+    ELSEVIER_API_3,
+    ELSEVIER_API_4,
+    ELSEVIER_API_5,
+    ELSEVIER_API_6,
+    ELSEVIER_API_7,
+    ELSEVIER_API_8
+)
 
 from datetime import datetime
 
@@ -76,40 +85,33 @@ def parse_doc_search_result(res, journal_doc):
 
     return paper_sum
 
-def index_papers_by_journal_year(journal_title, first_year, final_year, mongo_insert=False, mongo_update=False):
+def index_papers_by_journal_year(journal_title, first_year, final_year, client, mongo_insert=False, mongo_update=False):
+    paper_l = []
+    missed_paper_l = []
+
+    # Grab MongoDB journal entry
     journal_doc = journal_col.find_one({'Journal_Title': journal_title})
     if not journal_doc:
         return
 
-    # TODO: add a field for partially indexed years, like current year
-    # Check to see what the last year indexed was
+    # Update list of years to query (include unqueried and those that gave query errors earlier)
+    years_to_query = [y for y in range(first_year, final_year)]
     years_indexed = journal_doc['Years_Indexed']
     if years_indexed:
-        years_sorted = sorted([y['Year'] for y in years_indexed])
-        if years_sorted[-1] != final_year - 1:
-            first_year_upd = years_sorted[-1] + 1
-        else:
-            return
-    else:
-        first_year_upd = first_year
+        for y in years_indexed:
+            years_to_query.remove(y['Year'])
 
-    print(f"========Searching for papers from {journal_doc['Journal_Title']} ({first_year_upd}-{final_year - 1})========\n")
-
-    paper_l = []
-    missed_paper_l = []
-
-
+    # Grab number of indexed and missing docs if previously queried
     if paper_col.find_one({'Journal': journal_title}):
         indexed_docs = [p for p in paper_col.find({'Journal': journal_title})]
     else:
         indexed_docs = []
-
     if missed_paper_col.find_one({'Journal': journal_title}):
         missed_docs = [p for p in missed_paper_col.find({'Journal': journal_title})]
     else:
         missed_docs = []
 
-    for year in range(first_year_upd, final_year):
+    for year in years_to_query:
 
         year_indexed_doc_num = 0
         year_missed_doc_num = 0
@@ -131,10 +133,13 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, mongo_in
             search_success = False
 
         if search_success:
+            scopus_available = None
             if doc_search.results == [{'@_fa': 'true', 'error': 'Result set was empty'}]:
                 print("Search was successful but result set was empty for {}".format(year))
-                search_success = False
+                scopus_available = False
+
             else:
+                scopus_available = True
                 for res in doc_search.results:
 
                     paper_sum = parse_doc_search_result(res, journal_doc)
@@ -148,9 +153,8 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, mongo_in
                         missed_paper_l.append(paper_sum)
                         year_missed_doc_num += 1
 
-                print("Search success for from {} ({} up thru {})!\nIndexed {} new papers\nMissed {} new papers ".format(
+                print("Search success for from {} ({})!\nIndexed {} new papers\nMissed {} new papers ".format(
                     journal_doc["Journal_Title"],
-                    first_year_upd,
                     year,
                     year_indexed_doc_num,
                     year_missed_doc_num
@@ -159,12 +163,14 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, mongo_in
                 )
         else:
             print("Search failure for {} in {}".format(journal_doc['Journal_Title'], year))
+            return False
+
 
         print('\n\n')
         year_meta = {
             'Year': year,
             'Current_Year': current_year,
-            'Search_Success': search_success,
+            'Scopus_Available': scopus_available,
             'Indexed_Doc_Num': year_indexed_doc_num,
             'Missed_Doc_Num': year_missed_doc_num,
             'last_updated': datetime.utcnow()
@@ -189,11 +195,12 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, mongo_in
             "Years_Indexed": years_indexed
         }})
 
-    return
+
+    return True
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-n", type=int, required=True, help="API key number")
+    parser.add_argument("-n", type=int, required=False, help="API key number")
     args = parser.parse_args()
 
     # TODO: find a way to check rate limits (here's a start: https://dev.elsevier.com/api_key_settings.html)
@@ -202,20 +209,36 @@ if __name__ == "__main__":
         2: ELSEVIER_API_2,
         3: ELSEVIER_API_3,
         4: ELSEVIER_API_4,
+        5: ELSEVIER_API_5,
+        6: ELSEVIER_API_6,
+        7: ELSEVIER_API_7,
+        8: ELSEVIER_API_8,
     }
-    client = ElsClient(api_keys[args.n])
+
+    if args.n:
+        api_key_list = args.n
 
     # TODO: add as a command line argument, not hardcoded into script
     first_year = 2000
     final_year = 2024
 
-    # TODO: Make the loop a list of all the journal names
     journal_titles = [d['Journal_Title'] for d in journal_col.find({})]
-    for journal_title in journal_titles:
-        index_papers_by_journal_year(
-            journal_title,
-            first_year,
-            final_year,
-            mongo_insert=True,
-            mongo_update=True
-        )
+
+    for key in api_keys:
+        for journal_title in journal_titles:
+            print(f"=====Searching for papers from {journal_title} ({first_year}-{final_year - 1}) (API KEY {key})=====\n")
+            client = ElsClient(api_keys[key])
+            journal_year_index = index_papers_by_journal_year(
+                journal_title,
+                first_year,
+                final_year,
+                client,
+                mongo_insert=True,
+                mongo_update=True
+            )
+            if not journal_year_index:
+                if key != 8:
+                    print(f"\n\nSwitching to API KEY {key+1}\n\n")
+                    break
+                else:
+                    print("\n\nHitting quota for all API keys.")
