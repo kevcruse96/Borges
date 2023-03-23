@@ -132,6 +132,9 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, client, 
         except:
             search_success = False
 
+        pprint(doc_search.results)
+        stop
+
         if search_success:
             scopus_available = None
             if doc_search.results == [{'@_fa': 'true', 'error': 'Result set was empty'}]:
@@ -222,7 +225,10 @@ if __name__ == "__main__":
     first_year = 2000
     final_year = 2024
 
-    journal_titles = [d['Journal_Title'] for d in journal_col.find({})]
+    journal_titles = [d['Journal_Title'] for d in journal_col.find({
+        'Years_Indexed': {'$not': {'$size': 24}}
+    })]
+
 
     for key in api_keys:
         for journal_title in journal_titles:
