@@ -6,6 +6,8 @@ from __future__ import absolute_import
 
 import argparse
 
+import requests
+
 from DBGater.db_singleton_mongo import SynDevAdmin
 from elsapy.elsclient import ElsClient
 from elsapy.elssearch import ElsSearch
@@ -85,7 +87,15 @@ def parse_doc_search_result(res, journal_doc):
 
     return paper_sum
 
-def index_papers_by_journal_year(journal_title, first_year, final_year, client, mongo_insert=False, mongo_update=False):
+def index_papers_by_journal_year(
+        journal_title,
+        first_year,
+        final_year,
+        client,
+        api_key,
+        check_unindexed=False,
+        mongo_insert=False,
+        mongo_update=False):
     paper_l = []
     missed_paper_l = []
 
@@ -94,12 +104,14 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, client, 
     if not journal_doc:
         return
 
-    # Update list of years to query (include unqueried and those that gave query errors earlier)
     years_to_query = [y for y in range(first_year, final_year)]
-    years_indexed = journal_doc['Years_Indexed']
-    if years_indexed:
-        for y in years_indexed:
-            years_to_query.remove(y['Year'])
+
+    if not check_unindexed:
+        # Update list of years to query (include unqueried and those that gave query errors earlier)
+        years_indexed = journal_doc['Years_Indexed']
+        if years_indexed:
+            for y in years_indexed:
+                years_to_query.remove(y['Year'])
 
     # Grab number of indexed and missing docs if previously queried
     if paper_col.find_one({'Journal': journal_title}):
@@ -123,7 +135,13 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, client, 
         # Below is a slow step for large queries
         # TODO: add more query endpoints (e.g. keywords)
         # TODO: some journals (e.g. Focus on Powder Coatings) are not accessible by Scopus, but are by ScienceDirect... so we do need scidir
-        doc_search = ElsSearch('ISSN({}) AND PUBYEAR = {}'.format(journal_doc["Journal_ISSN"], year), 'scopus') # Note this was pretty tricky to figure out... there needs to be spaces between the qualifying and "PUBYEAR"/year... also need to use 'scopus' instead of 'scidir'
+        # doc_search = ElsSearch('ISSN({}) AND PUBYEAR = {}'.format(journal_doc["Journal_ISSN"], year), 'scopus') # Note this was pretty tricky to figure out... there needs to be spaces between the qualifying and "PUBYEAR"/year... also need to use 'scopus' instead of 'scidir'
+        # doc_search.execute(client, get_all=True)
+        # pprint(doc_search._uri)
+        # stop
+        res = requests.get("https://api.elsevier.com/content/metadata/article?query=pub-date+is+2022&issn(13645439)&count=25&view=COMPLETE&apikey={}".format(api_key))
+        pprint(res.content)
+        stop
 
         # Check if credentials are good
         search_success = True
@@ -131,9 +149,6 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, client, 
             doc_search.execute(client, get_all=True)
         except:
             search_success = False
-
-        pprint(doc_search.results)
-        stop
 
         if search_success:
             scopus_available = None
@@ -156,7 +171,7 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, client, 
                         missed_paper_l.append(paper_sum)
                         year_missed_doc_num += 1
 
-                print("Search success for from {} ({})!\nIndexed {} new papers\nMissed {} new papers ".format(
+                print("Search success for {} ({})!\nIndexed {} new papers\nMissed {} new papers ".format(
                     journal_doc["Journal_Title"],
                     year,
                     year_indexed_doc_num,
@@ -204,6 +219,7 @@ def index_papers_by_journal_year(journal_title, first_year, final_year, client, 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", type=int, required=False, help="API key number")
+    parser.add_argument("-u", action='store_true', required=False, help="Flag to only index papers for previously unindexible journals (issue for Scopus querying)")
     args = parser.parse_args()
 
     # TODO: find a way to check rate limits (here's a start: https://dev.elsevier.com/api_key_settings.html)
@@ -220,17 +236,22 @@ if __name__ == "__main__":
 
     if args.n:
         api_key_list = args.n
+    else:
+        api_key_list = list(api_keys.keys())
 
     # TODO: add as a command line argument, not hardcoded into script
     first_year = 2000
     final_year = 2024
 
-    journal_titles = [d['Journal_Title'] for d in journal_col.find({
-        'Years_Indexed': {'$not': {'$size': 24}}
-    })]
+    if args.u:
+        from Borges.db_scripts.journal_scripts import get_unindexed_journals
+        journal_titles = get_unindexed_journals("ElsevierJournals")
+    else:
+        journal_titles = [d['Journal_Title'] for d in journal_col.find({
+            'Years_Indexed': {'$not': {'$size': 24}}
+        })]
 
-
-    for key in api_keys:
+    for key in api_key_list:
         for journal_title in journal_titles:
             print(f"=====Searching for papers from {journal_title} ({first_year}-{final_year - 1}) (API KEY {key})=====\n")
             client = ElsClient(api_keys[key])
@@ -239,6 +260,8 @@ if __name__ == "__main__":
                 first_year,
                 final_year,
                 client,
+                api_keys[key],
+                check_unindexed=args.u,
                 mongo_insert=True,
                 mongo_update=True
             )
