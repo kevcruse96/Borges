@@ -24,7 +24,7 @@ class RSCAnalystSpider(scrapy.Spider):
     http_user = 'user'
     http_pass = 'userpass'
 
-    with open(os.path.join(os.path.dirname(__file__), 'start_urls_20230226.yaml'), 'r') as yf:
+    with open(os.path.join(os.path.dirname(__file__), 'start_urls_20230302.yaml'), 'r') as yf:
         url_yaml = yaml.safe_load(yf)
 
     start_urls = url_yaml[name]
@@ -36,7 +36,7 @@ class RSCAnalystSpider(scrapy.Spider):
     def start_requests(self):
         for url in self.start_urls:
             url = str(url)
-            yield SplashRequest(url, self.parse, args={'wait': 2})
+            yield SplashRequest(url, self.parse, args={'wait': 10, 'timeout': 90, 'resource-timeout': 10})
 
     def parse(self, response):
         try:
@@ -58,7 +58,7 @@ class RSCAnalystSpider(scrapy.Spider):
                         article_page = response.urljoin(article_page)
                         current_crawl_results = crawl_results.copy()
                         current_crawl_results.update({"Article_Type": article_type, "Open_Access": open_access})
-                        request = SplashRequest(article_page, self._parse_article, args={'wait': 4})
+                        request = SplashRequest(article_page, self._parse_article, args={'wait': 10, 'timeout': 90, 'resource-timeout': 10})
                         request.meta['meta_info'] = current_crawl_results
                         yield request
 
@@ -66,7 +66,7 @@ class RSCAnalystSpider(scrapy.Spider):
                 previous_issue = response.css('.article-nav__bar a:nth-child(1)::attr(href)').extract_first()
                 if previous_issue:
                     previous_issue = response.urljoin(previous_issue)
-                    yield SplashRequest(previous_issue, self.parse, args={'wait': 8})
+                    yield SplashRequest(previous_issue, self.parse, args={'wait': 10, 'timeout': 90, 'resource-timeout': 10})
         except:
             pass
 
