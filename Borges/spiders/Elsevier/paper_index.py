@@ -4,8 +4,8 @@ from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
 
+import json
 import argparse
-
 import requests
 
 from DBGater.db_singleton_mongo import SynDevAdmin
@@ -26,6 +26,7 @@ from Borges.settings import (
 from datetime import datetime
 
 from pprint import pprint
+import random
 
 __author__ = 'Ziqin (Shaun) Rong'
 __maintainer__ = 'Kevin Cruse'
@@ -39,7 +40,7 @@ journal_col = db.collection("ElsevierJournals")
 paper_col = db.collection("ElsevierPapers")
 missed_paper_col = db.collection("ElsevierPapers_missed")
 
-def parse_doc_search_result(res, journal_doc):
+def parse_doc_search_result(res, journal_doc, source):
 
     paper_sum = dict()
 
@@ -57,7 +58,10 @@ def parse_doc_search_result(res, journal_doc):
         paper_sum["Published_Year"] = None
 
     try:
-        paper_sum["Open_Access"] = res['openaccessFlag']
+        if source == 'Scopus':
+            paper_sum["Open_Access"] = res['openaccessFlag']
+        elif source == 'SciDir':
+            paper_sum["Open_Access"] = res['openaccessArticle']
     except:
         paper_sum["Open_Access"] = False
 
@@ -71,14 +75,17 @@ def parse_doc_search_result(res, journal_doc):
     except:
         paper_sum["Title"] = None
 
-    # TODO: will need to find another way to get author and issue if using Scopus
     # TODO: can we get ORCID
+
+    paper_sum["Authors"] = []
+
     try:
-        paper_sum["Authors"] = ["{} {}".format(ath[u'given-name'].encode("utf-8"),
-                                               ath[u'surname'].encode("utf-8"))
-                                for ath in res[u'authors'][u'author']]
+        paper_sum["Authors"].extend([f"{ath['$'].split(', ')[1]} {ath['$'].split(', ')[0]}"
+                                for ath in res['dc:creator']])
+        paper_sum["Authors"].extend([f"{ath['$'].split(', ')[1]} {ath['$'].split(', ')[0]}"
+                                for ath in res['authors']['author']])
     except:
-        paper_sum["Authors"] = None
+        paper_sum["Authors"] = res['authors']
 
     try:
         paper_sum["Issue"] = int(res[u'prism:issueIdentifier'].encode("utf-8"))
@@ -93,7 +100,7 @@ def index_papers_by_journal_year(
         final_year,
         client,
         api_key,
-        check_unindexed=False,
+        source,
         mongo_insert=False,
         mongo_update=False):
     paper_l = []
@@ -104,14 +111,31 @@ def index_papers_by_journal_year(
     if not journal_doc:
         return
 
-    years_to_query = [y for y in range(first_year, final_year)]
+    years_to_query = [(yyyy, None) for yyyy in range(first_year, final_year)]
 
-    if not check_unindexed:
-        # Update list of years to query (include unqueried and those that gave query errors earlier)
-        years_indexed = journal_doc['Years_Indexed']
-        if years_indexed:
-            for y in years_indexed:
+    # Update list of years to query (include unqueried and those that gave query errors earlier)
+    # years_indexed can be initiated more intelligently
+    years_indexed = []
+    old_years_indexed = journal_doc['Years_Indexed']
+    if old_years_indexed:
+        for y in old_years_indexed:
+            if not ( # this logic checks if the year exists but we haven't looked through a particular source yet
+                (
+                    source == 'SciDir' and (
+                        'SciDir_Available' not in y.keys() or
+                        y['SciDir_Available'] == None
+                    )
+                ) or
+                (
+                    source == 'Scopus' and (
+                        'Scopus_Available' not in y.keys() or
+                        y['Scopus_Aviailabe'] == None
+                    )
+                )
+            ):
                 years_to_query.remove(y['Year'])
+            else:
+                years_to_query[years_to_query.index((y['Year'], None))] = (y['Year'], y)
 
     # Grab number of indexed and missing docs if previously queried
     if paper_col.find_one({'Journal': journal_title}):
@@ -123,44 +147,88 @@ def index_papers_by_journal_year(
     else:
         missed_docs = []
 
-    for year in years_to_query:
+    for year, year_meta in years_to_query:
 
-        year_indexed_doc_num = 0
-        year_missed_doc_num = 0
+        if not year_meta: # could be a better way of doing this...
 
-        current_year = False
-        if year == final_year-1:
-            current_year = True
+            year_indexed_doc_num = 0
+            year_missed_doc_num = 0
+
+            current_year = False
+            if year == final_year-1:
+                current_year = True
+
+        else:
+            year_indexed_doc_num = year_meta['Indexed_Doc_Num']
+            year_missed_doc_num = year_meta['Missed_Doc_Num']
+            current_year = year_meta['Current_Year']
 
         # Below is a slow step for large queries
         # TODO: add more query endpoints (e.g. keywords)
-        # TODO: some journals (e.g. Focus on Powder Coatings) are not accessible by Scopus, but are by ScienceDirect... so we do need scidir
-        # doc_search = ElsSearch('ISSN({}) AND PUBYEAR = {}'.format(journal_doc["Journal_ISSN"], year), 'scopus') # Note this was pretty tricky to figure out... there needs to be spaces between the qualifying and "PUBYEAR"/year... also need to use 'scopus' instead of 'scidir'
-        # doc_search.execute(client, get_all=True)
-        # pprint(doc_search._uri)
-        # stop
-        res = requests.get("https://api.elsevier.com/content/metadata/article?query=pub-date+is+2022&issn(13645439)&count=25&view=COMPLETE&apikey={}".format(api_key))
-        pprint(res.content)
-        stop
 
-        # Check if credentials are good
         search_success = True
-        try:
-            doc_search.execute(client, get_all=True)
-        except:
-            search_success = False
+
+        if source == 'Scopus':
+             doc_search = ElsSearch('ISSN({}) AND PUBYEAR = {}'.format(journal_doc["Journal_ISSN"], year), 'scopus') # Note this was pretty tricky to figure out... there needs to be spaces between the qualifying and "PUBYEAR"/year... also need to use 'scopus' instead of 'scidir'
+             try:
+                 doc_search.execute(client, get_all=True)
+                 results = doc_search.results
+             except:
+                 search_success = False
+
+        elif source == 'SciDir':
+            results = []
+
+            i = 0
+            og_count = 100
+            total_entries = 1
+            while i < total_entries / og_count:
+
+                if total_entries != 1 and (total_entries / og_count) - i < 1: # first half of this logic might be iffy...
+                    count = total_entries % og_count
+                else:
+                    count = og_count
+
+                res = requests.get(
+                    f"https://api.elsevier.com/content/metadata/article?query="
+                    f"(issn({journal_doc['Journal_ISSN'].replace('-', '')})+AND+pub-date+is+{year})&view=COMPLETE&count={count}&start={i}&apikey={api_key}"
+                )
+                i += 1
+                try:
+                    total_entries = int(json.loads(res.content.decode())['search-results']['opensearch:totalResults'])
+                    results.extend(json.loads(res.content.decode())['search-results']['entry'])
+                except:
+                    search_success = False
 
         if search_success:
-            scopus_available = None
-            if doc_search.results == [{'@_fa': 'true', 'error': 'Result set was empty'}]:
+
+            if not year_meta:
+                scopus_available = None
+                scidir_available = None
+            else:
+                scopus_available = year_meta['Scopus_Available']
+                if 'SciDir_Available' in year_meta.keys(): # will be able to remove this if logic after subsequent run
+                    scidir_available = year_meta['SciDir_Available']
+                else:
+                    scidir_available = None
+
+            if results == [{'@_fa': 'true', 'error': 'Result set was empty'}]:
                 print("Search was successful but result set was empty for {}".format(year))
-                scopus_available = False
+                if source == 'Scopus':
+                    scopus_available = False
+                elif source  == 'SciDir':
+                    scidir_available = False
+                    scopus_available = False # WARNING: should remove this after initial run... better to add an indicator that
 
             else:
-                scopus_available = True
-                for res in doc_search.results:
+                if source == 'Scopus':
+                    scopus_available = True
+                elif source == 'SciDir':
+                    scidir_available = True
 
-                    paper_sum = parse_doc_search_result(res, journal_doc)
+                for res in results:
+
+                    paper_sum = parse_doc_search_result(res, journal_doc, source)
 
                     if paper_sum['DOI']:
                         indexed_docs.append(paper_sum)
@@ -189,26 +257,30 @@ def index_papers_by_journal_year(
             'Year': year,
             'Current_Year': current_year,
             'Scopus_Available': scopus_available,
+            'SciDir_Available': scidir_available,
             'Indexed_Doc_Num': year_indexed_doc_num,
             'Missed_Doc_Num': year_missed_doc_num,
             'last_updated': datetime.utcnow()
         }
 
         years_indexed.append(year_meta)
+        if paper_l:
+            pprint(random.choice(paper_l))
 
     # TODO: move dumping inside year-by-year loop?
-
-    print(f'Dumping {len(paper_l)} papers from {journal_doc["Journal_Title"]} into ElsevierPapers...\n')
-
     # TODO: Would be nice to have a way to know for certain that we don't already have the paper, then insert it
 
+    pprint(years_indexed)
+
     if mongo_insert:
+        print(f'Dumping {len(paper_l)} papers from {journal_doc["Journal_Title"]} into ElsevierPapers...\n')
         if paper_l:
             paper_col.insert_many(paper_l)
         if missed_paper_l:
             missed_paper_col.insert_many(missed_paper_l)
 
     if mongo_update:
+        print(f'Updating journal entry for {journal_doc["Journal_Title"]} in ElsevierJournals...\n')
         journal_col.update_one({"_id": journal_doc["_id"]}, {"$set": {
             "Years_Indexed": years_indexed
         }})
@@ -219,7 +291,11 @@ def index_papers_by_journal_year(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", type=int, required=False, help="API key number")
-    parser.add_argument("-u", action='store_true', required=False, help="Flag to only index papers for previously unindexible journals (issue for Scopus querying)")
+    parser.add_argument("-s", "--source", type=str, required=True, help="Source for scraping (Scopus or SciDir)")
+    parser.add_argument("-i", "--ignore_indexed", action='store_true', required=False,
+                        help="Only index papers from unattempted journals")
+    parser.add_argument("-u", "--only_unindexed", action='store_true', required=False,
+                        help="Flag to only index papers for previously unindexible journals (issue for Scopus querying)")
     args = parser.parse_args()
 
     # TODO: find a way to check rate limits (here's a start: https://dev.elsevier.com/api_key_settings.html)
@@ -243,16 +319,20 @@ if __name__ == "__main__":
     first_year = 2000
     final_year = 2024
 
-    if args.u:
+    if args.ignore_indexed:
+        journal_titles = [d['Journal_Title'] for d in journal_col.find({
+            'Years_Indexed': {'$not': {'$size': final_year - first_year}}
+        })]
+    elif args.only_unindexed:
         from Borges.db_scripts.journal_scripts import get_unindexed_journals
         journal_titles = get_unindexed_journals("ElsevierJournals")
     else:
-        journal_titles = [d['Journal_Title'] for d in journal_col.find({
-            'Years_Indexed': {'$not': {'$size': 24}}
-        })]
+        journal_titles = [d['Journal_Title'] for d in journal_col.find({})]
 
     for key in api_key_list:
         for journal_title in journal_titles:
+            if journal_title == "Focus on Powder Coatings":
+                continue
             print(f"=====Searching for papers from {journal_title} ({first_year}-{final_year - 1}) (API KEY {key})=====\n")
             client = ElsClient(api_keys[key])
             journal_year_index = index_papers_by_journal_year(
@@ -261,9 +341,9 @@ if __name__ == "__main__":
                 final_year,
                 client,
                 api_keys[key],
-                check_unindexed=args.u,
-                mongo_insert=True,
-                mongo_update=True
+                source=args.source,
+                mongo_insert=False,
+                mongo_update=False
             )
             if not journal_year_index:
                 if key != 8:
