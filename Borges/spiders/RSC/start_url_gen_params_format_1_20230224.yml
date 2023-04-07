@@ -4,6 +4,7 @@ RSC:
     start_vol: 125
     end_vol: 148
     issue_per_year: 24
+    last_issue_no: 7
   Analytical_Methods:
     format: http://pubs.rsc.org/en/journals/journalissues/ay#!issueid=ay{}&type=current&issnprint=1759-9660
     start_vol: 1

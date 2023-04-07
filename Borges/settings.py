@@ -17,7 +17,7 @@ SPIDER_MODULES = ['Borges.spiders']
 NEWSPIDER_MODULE = 'Borges.spiders'
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
-USER_AGENT = 'CederGroup@berkeley' #'; TDM Account number: 1351332'
+USER_AGENT = 'CederGroup@berkeley-TDMCrawler' #'; TDM Account number: 1351332'
 
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = False
