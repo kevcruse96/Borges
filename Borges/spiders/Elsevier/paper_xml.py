@@ -8,35 +8,69 @@ import requests
 from DBGater.db_singleton_mongo import SynDevAdmin
 import time
 from pymongo.errors import DocumentTooLarge
+from Borges.db_scripts.journal_scripts import update_journal_entry
 
-from Borges.settings import ELSEVIER_API_1, ELSEVIER_API_2, ELSEVIER_API_3, ELSEVIER_API_4
+from Borges.settings import (
+    ELSEVIER_API_1,
+    ELSEVIER_API_2,
+    ELSEVIER_API_3,
+    ELSEVIER_API_4,
+    ELSEVIER_API_5,
+    ELSEVIER_API_6,
+    ELSEVIER_API_7,
+    ELSEVIER_API_8
+)
+
+from datetime import datetime
+from pprint import pprint
 
 __author__ = 'Ziqin (Shaun) Rong'
 __maintainer__ = 'Kevin Cruse'
 __email__ = 'kevcruse96@gmail.com'
 
+current_year = 2023
 
-def scrape_paper(wait_time, col, api_key):
+def scrape_paper(wait_time, paper_col, journal_col, api_key):
     time.sleep(wait_time)
-    doc = col.find_one({"Crawled": False})
+    # doc = paper_col.find_one({"Crawled": False})
+    doc = [p for p in paper_col.aggregate([{'$sample': {'size': 1}}])][0]
+
     if not doc:
         return 1
 
+    # Scrape HTML and update paper_col entry
     print('Start Scraping for Paper {}.'.format(doc['DOI']))
 
     res = requests.get("https://api.elsevier.com/content/article/doi/{}?apikey={}&view=FULL".format(doc['DOI'],
                                                                                                     api_key))
+
+    pprint(res.content)
+    stop
+
     if res.status_code == 200:
         try:
-            paper_col.update_one({'_id': doc["_id"]}, {"$set": {"Paper_Content": res.content, "Crawled": True, "Error": None}})
-            print("Successfully Download Paper {}.".format(doc["DOI"]))
+            # paper_col.update_one(
+            #     {'_id': doc["_id"]},
+            #     {
+            #         "$set": {
+            #             "Paper_Content": res.content,
+            #             "Crawled": True,
+            #             "Error": None
+            #         }
+            #     }
+            # )
+            print("Successfully Downloaded Paper {}.".format(doc["DOI"]))
+
+            # Update relevant journal_col entry
+            # update_journal_entry(journal_col, doc['Journal'], doc['Published_Year'])
+
         except DocumentTooLarge:
-            paper_col.update_one({'_id': doc['_id']}, {"$set": {"Error": "pymongo.errors.DocumentTooLarge",
-                                                            "Crawled": True}})
+            # paper_col.update_one({'_id': doc['_id']}, {"$set": {"Error": "pymongo.errors.DocumentTooLarge",
+            #                                                 "Crawled": True}})
             print("Document Too Large Error for Paper {}".format(doc['DOI']))
     elif res.status_code == 400:
-        paper_col.update_one({'_id': doc['_id']}, {"$set": {"Error": "Bad Request Code",
-                                                        "Crawled": True}})
+        # paper_col.update_one({'_id': doc['_id']}, {"$set": {"Error": "Bad Request Code",
+        #                                                 "Crawled": True}})
         print("Bad request URL for Paper {}".format(doc['DOI']))
     else:
         print("Response Code: {}.".format(res.status_code))
@@ -50,12 +84,19 @@ if __name__ == '__main__':
     paper_col = db.collection("ElsevierPapers")
     journal_col = db.collection("ElsevierJournals")
 
-    # TODO: add portion to update Years_Crawled field in Elsevier Journals? Maybe just get rid of that field
-
     while True:
         continue_l = []
-        for api in [ELSEVIER_API_1, ELSEVIER_API_2, ELSEVIER_API_3, ELSEVIER_API_4]:
+        for api in [
+            ELSEVIER_API_1,
+            ELSEVIER_API_2,
+            ELSEVIER_API_3,
+            ELSEVIER_API_4,
+            ELSEVIER_API_5,
+            ELSEVIER_API_6,
+            ELSEVIER_API_7,
+            ELSEVIER_API_8,
+        ]:
             for i in range(3):
-                continue_l.append(scrape_paper(0.1, paper_col, api))
+                continue_l.append(scrape_paper(0.1, paper_col, journal_col, api))
         if sum(continue_l) > 0:
             break
