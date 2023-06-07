@@ -14,6 +14,10 @@ from Borges.settings import AIP_BASEURL, AIP_RESOURCE, AIP_AUTHORITY_URL, AIP_CL
 
 from pprint import pprint
 
+__author__ = 'Kevin Cruse'
+__maintainer__ = 'Kevin Cruse'
+__email__ = 'kevcruse96@gmail.com'
+
 # connect to appropriate database
 db = SynProAdmin.db_access()
 db.connect() # It seems that this method uses the .authenticate() method, which was eliminated after

@@ -100,7 +100,7 @@ if __name__ == "__main__":
                     elif 'Message' in articles_query.keys() and articles_query[
                         'Message'] == 'Authorization has been denied for this request.':
                         print(f"{articles_query['Message']}.. Trying again after 30 seconds...")
-                        time.sleep(30)
+                        time.sleep(30) # TODO: this doesn't seem to work... needs a full restart of the script
                         continue
                     else:
                         print()
