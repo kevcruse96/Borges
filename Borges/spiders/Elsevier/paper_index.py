@@ -264,13 +264,10 @@ def index_papers_by_journal_year(
         }
 
         years_indexed.append(year_meta)
-        if paper_l:
-            pprint(random.choice(paper_l))
 
-    # TODO: move dumping inside year-by-year loop?
+    # TODO: move dumping inside year-by-year loop? (This may actually be worse for restarting / conditioning)
     # TODO: Would be nice to have a way to know for certain that we don't already have the paper, then insert it
 
-    pprint(years_indexed)
 
     if mongo_insert:
         print(f'Dumping {len(paper_l)} papers from {journal_doc["Journal_Title"]} into ElsevierPapers...\n')
@@ -331,8 +328,6 @@ if __name__ == "__main__":
 
     for key in api_key_list:
         for journal_title in journal_titles:
-            if journal_title == "Focus on Powder Coatings":
-                continue
             print(f"=====Searching for papers from {journal_title} ({first_year}-{final_year - 1}) (API KEY {key})=====\n")
             client = ElsClient(api_keys[key])
             journal_year_index = index_papers_by_journal_year(
@@ -342,8 +337,8 @@ if __name__ == "__main__":
                 client,
                 api_keys[key],
                 source=args.source,
-                mongo_insert=False,
-                mongo_update=False
+                mongo_insert=True,
+                mongo_update=True
             )
             if not journal_year_index:
                 if key != 8:
