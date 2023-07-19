@@ -79,6 +79,9 @@ def scrape_paper(
     if res.status_code == 400:
         error = f"400: Bad request URL"
 
+    elif res.status_code == 401:
+        error = f"401: Invalid API key"
+
     elif res.status_code == 404:
         error = f"404: The resource specified cannot be found"
 
@@ -91,16 +94,31 @@ def scrape_paper(
             Paper_Content = res.content
         else:
             Paper_Content = None
-        paper_col.update_one(
-            {'_id': _id},
-            {
-                "$set": {
-                    "Paper_Content": Paper_Content,
-                    "Error": error,
-                    "Crawled": True
+
+        try:
+            paper_col.update_one(
+                {'_id': _id},
+                {
+                    "$set": {
+                        "Paper_Content": Paper_Content,
+                        "Error": error,
+                        "Crawled": True
+                    }
                 }
-            }
-        )
+            )
+        except DocumentTooLarge:
+            error = "Document too large"
+            paper_col.update_one(
+                {'_id': _id},
+                {
+                    "$set": {
+                        "Paper_Content": None,
+                        "Error": error,
+                        "Crawled": True
+                    }
+                }
+            )
+
 
     return error
 
@@ -109,7 +127,7 @@ def scrape_papers(
     api_key,
     thread_num,
     paper_col,
-    journal_col
+    journal_col,
 ):
 
     print(f"Starting Thread {thread_num}")
@@ -137,7 +155,7 @@ def scrape_papers(
                 print()
                 waittime = 5
                 if j == 2:
-                    if any([error.startswith(e) for e in ['Document', '400', '404']]):
+                    if any([error.startswith(e) for e in ['Document', '400', '401', '404']]):
                         print(f"Exceeded attempts for {doi} on Thread {thread_num}")
                         waittime = 0.1
                         if not os.path.isfile(f'./logs/xml_scrape/{run_date}_{thread_num}.log'):
@@ -222,13 +240,16 @@ if __name__ == '__main__':
     #create_dummy_col("ElsevierPapers_Test", col_to_dupe=paper_col, randomize=True, sample_size=400000)
     #test_col = db.collection("ElsevierPapers_Test")
 
-
+    # TODO: Make splitting optional
     # Initialize pickle data files
     mongo2pickle('previously_scraped_dois.pkl', old_paper_col, list, 'DOI', criteria={'Publisher': 'Elsevier'})
     mongo2pickle(f'{run_date}_dois_crawled.pkl', paper_col, 'dicts', store_keys=['_id', 'DOI'], overwrite=True, criteria={'Crawled': False}, batches=8)
 
     with open('./data/previously_scraped_dois.pkl', 'rb') as fp:
         old_paper_dois = pickle.load(fp)
+
+    #with open(f'./data/{run_date}_dois_crawled.pkl', 'rb') as fp:
+    #    dois_to_scrape = pickle.load(fp)
 
     with open(f'./data/0_{run_date}_dois_crawled.pkl', 'rb') as fp:
         dois_to_scrape_0 = pickle.load(fp)
@@ -259,6 +280,8 @@ if __name__ == '__main__':
 
     #with open(f'./data/9_{run_date}_dois_crawled.pkl', 'rb') as fp:
     #    dois_to_scrape_9 = pickle.load(fp)
+
+    # scrape_papers(dois_to_scrape, ELSEVIER_API_1, 1, paper_col, journal_col)
 
     # TODO: make a threading object using threading module?
     s1 = threading.Thread(target=scrape_papers, args=(dois_to_scrape_0, ELSEVIER_API_1, 1, paper_col, journal_col))
@@ -293,29 +316,3 @@ if __name__ == '__main__':
     s8.join()
     #s9.join()
     #s10.join()
-
-#    while True:
-#        for doi in dois_to_scrape:
-#            continue_l = []
-#            for api in [
-#                ELSEVIER_API_1,
-#                ELSEVIER_API_2,
-#                ELSEVIER_API_3,
-#                ELSEVIER_API_4,
-#                ELSEVIER_API_5,
-#                ELSEVIER_API_6,
-#                ELSEVIER_API_7,
-#                ELSEVIER_API_8,
-#                ELSEVIER_API_9,
-#                ELSEVIER_API_10
-#            ]:
-#                for i in range(3):
-#                    continue_l.append(scrape_paper(
-#                        0.1,
-#                        test_col,
-#                        journal_col,
-#                        api,
-#                        #old_paper_col=old_paper_col
-#                    ))
-#            if sum(continue_l) > 0:
-#                break
