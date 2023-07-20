@@ -6,6 +6,8 @@ from __future__ import absolute_import
 
 import argparse
 
+from tqdm import tqdm
+
 from DBGater.db_singleton_mongo import SynDevAdmin
 
 __author__ = 'Ziqin (Shaun) Rong'
@@ -22,7 +24,8 @@ if __name__ == '__main__':
     db.connect()
     col = db.collection(args.c)
 
-    for doc in col.find():
+    total = col.count_documents({})
+    for doc in tqdm(col.find({}), total=total):
         if 'HTML_Crawled' not in doc.keys() or doc['HTML_Crawled']:
             col.update_one({'_id': doc['_id']}, {'$set': {'HTML_Crawled': False}})
         elif 'Crawled' in doc.keys():
