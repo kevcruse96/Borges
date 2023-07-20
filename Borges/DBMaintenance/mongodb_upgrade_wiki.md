@@ -2,6 +2,8 @@ This page provides step-by-step instructions for upgrading the MongoDB instance 
 
 Original authors: Kevin Cruse
 
+Many thanks to Tanjin He for his invaluable help in this process
+
 ## Summary
 
 The version of MongDB is currently being updated from 3.4 to 5.0 (as of July 2022), which requires many non-trivial steps to ensure full compatibility for future applications. This page documents that process and provides useful tips for those who plan to make a similar upgrade in the future. 
