@@ -175,49 +175,6 @@ def scrape_papers(
     print(f"Completed Scrape for Thread {thread_num}!")
     return
 
-def mongo2pickle(savefile, col, savetype, store_keys=[], overwrite=False, criteria={}, batches=None):
-
-    # Note that this function only takes one key (optional) and one value (required)
-
-    if overwrite or not os.path.isfile(f'./data/{savefile}'):
-        print(f'Collecting and storing entries to {savefile}...')
-
-        #if savetype == dict:
-        #    dump_obj = {}
-        #elif savetype == list:
-        #    dump_obj = []
-
-        dump_obj = []
-
-        total_docs = col.count_documents(criteria)
-        for doc in tqdm(col.find(criteria), total=total_docs):
-            if savetype == 'dicts':
-                doc_to_save = {}
-                for k in store_keys:
-                    doc_to_save[k] = doc[k]
-                dump_obj.append(doc_to_save)
-            elif savetype == 'lst':
-                dump_obj.append(doc[store_val])
-
-        #dump_obj = list(set(dump_obj))
-
-        if batches:
-            batch_size = int(len(dump_obj) / batches)
-            leftover = len(dump_obj) % batches
-            for i in range(batches):
-                if i == batches - 1:
-                    end = batch_size + leftover
-                else:
-                    end = batch_size
-                with open(f'./data/{i}_{savefile}', 'wb') as fp:
-                    pickle.dump(dump_obj[i*batch_size:i*batch_size+end], fp)
-
-        with open(f'./data/{savefile}', 'wb') as fp:
-            pickle.dump(dump_obj, fp)
-
-    else:
-        print(f'{savefile} already exists.')
-
 def db_connect():
     fulltext_db = FullTextAdmin.db_access()
     # connecting to old database in case yo want to make sure we don't download twice... not doing this currently
@@ -243,7 +200,7 @@ if __name__ == '__main__':
     # TODO: Make splitting optional
     # Initialize pickle data files
     mongo2pickle('previously_scraped_dois.pkl', old_paper_col, list, 'DOI', criteria={'Publisher': 'Elsevier'})
-    mongo2pickle(f'{run_date}_dois_crawled.pkl', paper_col, 'dicts', store_keys=['_id', 'DOI'], overwrite=True, criteria={'Crawled': False}, batches=8)
+    mongo2pickle(f'{run_date}_dois_crawled.pkl', paper_col, store_keys=['_id', 'DOI'], overwrite=True, criteria={'Crawled': False}, batches=8)
 
     with open('./data/previously_scraped_dois.pkl', 'rb') as fp:
         old_paper_dois = pickle.load(fp)
