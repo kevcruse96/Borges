@@ -6,7 +6,7 @@ Many thanks to Tanjin He for his invaluable help in this process
 
 ## Summary
 
-The version of MongDB is currently being updated from 3.4 to 5.0 (as of July 2022), which requires many non-trivial steps to ensure full compatibility for future applications. This page documents that process and provides useful tips for those who plan to make a similar upgrade in the future. 
+The version of MongDB is currently being updated from 3.4 to 6.0.1 (as of September 2022), which requires many non-trivial steps to ensure full compatibility for future applications. This page documents that process and provides useful tips for those who plan to make a similar upgrade in the future. 
 
 Most information comes from https://www.mongodb.com/docs/manual/tutorial/upgrade-revision/, but there are other resources for our specific situation throughout this page.
 
