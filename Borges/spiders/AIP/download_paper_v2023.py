@@ -7,17 +7,22 @@ import adal
 import requests
 from datetime import datetime, timedelta
 import time
+import pickle
 import xml.etree.ElementTree as ET
 
 from DBGater.db_singleton_mongo import SynDevAdmin, SynProAdmin, FullTextAdmin
 from Borges.settings import AIP_BASEURL, AIP_RESOURCE, AIP_AUTHORITY_URL, AIP_CLIENT_ID, AIP_CLIENT_SECRET
 from Borges.db_scripts.create_dummy_col import create_dummy_col
+from Borges.db_scripts.mongo2pickle import mongo2pickle
 
 from pprint import pprint
 
 __author__ = 'Kevin Cruse'
 __maintainer__ = 'Kevin Cruse'
 __email__ = 'kevcruse96@gmail.com'
+
+# Establish persistent variables
+run_date = datetime.today().strftime("%Y%m%d")
 
 # connect to appropriate database
 db = SynProAdmin.db_access()
@@ -39,7 +44,9 @@ headers = {
 metadata_host = f"{AIP_BASEURL}/api/Search/metadata"
 fulltext_host = f"{AIP_BASEURL}/api/Search/fulltext"
 
-def scrape_paper(doi, paper_col): #, wait_time, paper_col, journal_col, api_key, old_paper_col=None):
+
+def scrape_paper(doi, wait_time, paper_col, journal_col, headers, mongo_update=False, old_paper_col=None):
+    time.sleep(wait_time)
 
     error = None
 
@@ -52,8 +59,6 @@ def scrape_paper(doi, paper_col): #, wait_time, paper_col, journal_col, api_key,
         f"{fulltext_host}?doi={doi}",
         headers=headers
     ).json()
-
-    doc = paper_col.find_one({'DOI': doi})
 
     if type(fulltext_res) == dict:
         if 'message' in fulltext_res.keys() and fulltext_res['message'].startswith('Out of bandwidth quota.'):
@@ -77,29 +82,33 @@ def scrape_paper(doi, paper_col): #, wait_time, paper_col, journal_col, api_key,
 
     elif fulltext_res == 'Invalid Response!':
         error = f"Invalid response for Paper {doi}"
-        paper_col.update_one(
-            {'_id': doc['_id']},
-            {
-                "$set": {
-                    "Error": error,
-                    "Crawled": True
+        if mongo_update:
+            paper_col.update_one(
+                {'_id': doc['_id']},
+                {
+                    "$set": {
+                        "Error": error,
+                        "Crawled": True
+                    }
                 }
-            }
-        )
+            )
 
     else:
         try:
             xml_parse_test = ET.fromstring(fulltext_res)
-            paper_col.update_one(
-                {'_id': doc["_id"]},
-                {
-                    "$set": {
-                        "Paper_Content": fulltext_res,
-                        "Crawled": True,
-                        "Error": error
+            pprint(xml_parse_test.find('/result').extract_first())
+            stop
+            if mongo_update:
+                paper_col.update_one(
+                    {'_id': doc["_id"]},
+                    {
+                        "$set": {
+                            "Paper_Content": fulltext_res,
+                            "Crawled": True,
+                            "Error": error
+                        }
                     }
-                }
-            )
+                )
 
 
         except Exception as e:
@@ -108,54 +117,36 @@ def scrape_paper(doi, paper_col): #, wait_time, paper_col, journal_col, api_key,
 
     return error
 
-def scrape_papers(doc, wait_time, paper_col, journal_col, headers, old_paper_col=None):
+def scrape_papers(doc, paper_col, journal_col, headers, old_paper_col=None):
     # TODO: Most of the code below is an exact copy of Elsevier.paper_xml.py ... should turn this into a skeleton script
-    time.sleep(wait_time)
-    # doc = paper_col.find_one({"Crawled": False})
+    wait_time = 3
+    total_dois = len(dois_to_scrape)
+    for i, doc in enumerate(dois_to_scrape):
+        _id = doc['_id']
+        doi = doc['DOI']
+        for j in range(3):
+            error = scrape_paper(
+                doi,
+                wait_time,
+                paper_col,
+                journal_col,
+                headers,
+                mongo_update=False
+            )
+            print(
+                f"Scraping {doi}, attempt {j + 1} ({i + 1}/{total_dois}, {time.ctime(time.time())})...")
 
-    if not doc:
-        return 1
-
-    # # check if paper has already been crawled in FullText.Paper_Raw_HTML
-    # if old_paper_col is not None and old_paper_col.find_one({'DOI': doc['DOI']}):
-    #     paper_col.update_one(
-    #         {'_id': doc["_id"]},
-    #         {
-    #             "$set": {
-    #                 "Crawled": True,
-    #                 "Notes": "Crawled in previous download",
-    #                 "Error": None
-    #             }
-    #         }
-    #     )
-    #     return
-
-    # Scrape HTML and update paper_col entry
-    print('Start Scraping for Paper {}.'.format(doc['DOI']))
-
-    status = scrape_paper(doc['DOI'], paper_col)
-
-    # paper_col.update_one(
-    #     {'_id': doc["_id"]},
-    #     {
-    #         "$set": {
-    #             "Crawled": True,
-    #             "Note": status[1]
-    #         }
-    #     }
-    # )
-
-    return status
+    return
 
 if __name__ == "__main__":
     db = SynDevAdmin.db_access()
-    fulltext_db = FullTextAdmin.db_access()  # connecting to old database to make sure we don't download twice
+    # fulltext_db = FullTextAdmin.db_access()  # connecting to old database to make sure we don't download twice
     # TODO: above, add a field that shows when single paper was downloaded
 
     db.connect()
-    fulltext_db.connect()
+    # fulltext_db.connect()
 
-    old_paper_col = fulltext_db.collection("Paper_Raw_HTML")
+    # old_paper_col = fulltext_db.collection("Paper_Raw_HTML")
     paper_col = db.collection("AIPPapers")
     journal_col = db.collection("AIPJournals")
 
@@ -163,23 +154,9 @@ if __name__ == "__main__":
 
     test_col = db.collection("AIPPapers_Test")
 
-    for paper in test_col.find({'Crawled': False}):
-        scrape_papers(
-            paper,
-            3,
-            test_col,
-            journal_col,
-            headers,
-            old_paper_col=old_paper_col
-       )
+    mongo2pickle(f'{run_date}_dois_crawled.pkl', test_col, store_keys=['_id', 'DOI'], overwrite=True, criteria={'Crawled': False})
 
-    # while True:
-    #     status =
-    #
-    #     if status[0] == 1:
-    #         pprint(status[1])
-    #         break
-    #
-    #     elif status[0] == 2:
-    #         pprint(status[1])
+    with open(f'./data/{run_date}_dois_crawled.pkl', 'rb') as fp:
+        dois_to_scrape = pickle.load(fp)
 
+    scrape_papers(dois_to_scrape, test_col, journal_col, headers)
