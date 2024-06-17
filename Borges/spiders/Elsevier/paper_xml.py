@@ -25,8 +25,8 @@ from Borges.settings import (
     ELSEVIER_API_6,
     ELSEVIER_API_7,
     ELSEVIER_API_8,
-    ELSEVIER_API_9,
-    ELSEVIER_API_10
+    # ELSEVIER_API_9,
+    # ELSEVIER_API_10
 )
 
 from tqdm import tqdm

@@ -35,6 +35,42 @@ def get_unindexed_journals(journal_col):
     print(f"\nDone! Collected {len(unindexed_journals)} unindexed journals")
     return unindexed_journals
 
+
+def update_journal_entry(journal_col, journal_title, year, success):
+    journal_doc = journal_col.find_one({'Journal_Title': journal_title})
+    years_crawled = journal_doc['Years_Crawled']
+
+    if years_crawled:
+        if year in [y['Year'] for y in years_crawled]:
+            for y in years_crawled:
+                if y['Year'] == year:
+                    if success:
+                        y['Scraped_Doc_Num'] = y['Scraped_Doc_Num'] + 1
+                    else:
+                        y['Missed_Doc_Num'] = y['Missed_Doc_Num'] + 1
+        else:
+            scraped = 0
+            missed = 0
+            if success:
+                scraped = 1
+            else:
+                missed = 1
+
+            new_y = {
+                'Year': year,
+                'Scraped_Doc_Num': scraped,
+                'Missed_Doc_Num': missed,
+                'last_updated': datetime.utcnow()
+            }
+
+            years_crawled.append(new_y)
+
+    journal_col.update_one({
+        {'Journal_Title': journal_title},
+        {'$set': {'Years_Crawled': years_crawled}}
+    })
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", type=str, required=True, help="Collection to query")

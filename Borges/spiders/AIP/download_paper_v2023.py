@@ -24,11 +24,11 @@ __email__ = 'kevcruse96@gmail.com'
 # Establish persistent variables
 run_date = datetime.today().strftime("%Y%m%d")
 
-# connect to appropriate database
-db = SynProAdmin.db_access()
-db.connect() # It seems that this method uses the .authenticate() method, which was eliminated after
-             # pymongo v3.4 (probably)... might be worthwhile to update DBGater accordingly, but for now
-             # pymongo==3.4 locally to run this
+# # connect to appropriate database
+# db = SynProAdmin.db_access()
+# db.connect() # It seems that this method uses the .authenticate() method, which was eliminated after
+#              # pymongo v3.4 (probably)... might be worthwhile to update DBGater accordingly, but for now
+#              # pymongo==3.4 locally to run this
 
 # establish AIP access token, header authentication, and appropriate target URL
 context = adal.AuthenticationContext(AIP_AUTHORITY_URL)
@@ -137,7 +137,7 @@ def scrape_papers(doc, paper_col, journal_col, headers, old_paper_col=None):
             if error == 'Out of bandwidth quota.':
                 print("Out of bandwidth quota")
                 # TODO: This chunk is used in a lot of AIP scraping scripts... should generalize and put somewhere for importing
-                time_formatted = fulltext_res['message'].split('replenished in ')[1].replace('.', '')
+                time_formatted = error['message'].split('replenished in ')[1].replace('.', '')
                 time_object = time.strptime(time_formatted, '%H:%M:%S')
                 tick = int(timedelta(
                     hours=time_object.tm_hour,
@@ -179,7 +179,13 @@ if __name__ == "__main__":
 
     # test_col = db.collection("AIPPapers_Test")
 
-    mongo2pickle(f'{run_date}_dois_crawled.pkl', paper_col, store_keys=['_id', 'DOI'], overwrite=True, criteria={'Crawled': False})
+    mongo2pickle(
+        f'{run_date}_dois_crawled.pkl',
+        paper_col,
+        store_keys=['_id', 'DOI'],
+        overwrite=True,
+        criteria={'Crawled': False}
+    )
 
     with open(f'./data/{run_date}_dois_crawled.pkl', 'rb') as fp:
         dois_to_scrape = pickle.load(fp)

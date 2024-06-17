@@ -129,7 +129,7 @@ def index_papers_by_journal_year(
                 (
                     source == 'Scopus' and (
                         'Scopus_Available' not in y.keys() or
-                        y['Scopus_Aviailabe'] == None
+                        y['Scopus_Available'] == None
                     )
                 )
             ):
