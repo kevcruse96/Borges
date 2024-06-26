@@ -112,11 +112,11 @@ class SpringerXMLDataExtractor:
         )
         if len(publisher_s) == 1:
             self.publisher = publisher_s[0]
-            if self.publisher != 'Springer':
-                self.notes.append("Publisher not Springer")
+            if self.publisher != 'SpringerNature':
+                self.notes.append("Publisher not SpringerNature")
         else:
-            self.publisher = 'Springer'
-            self.notes.append("Publisher inferred (from 2024 Springer upload)")
+            self.publisher = 'SpringerNature'
+            self.notes.append("Publisher inferred (from 2024 SpringerNature upload)")
 
 
     def _get_journal_title(self):

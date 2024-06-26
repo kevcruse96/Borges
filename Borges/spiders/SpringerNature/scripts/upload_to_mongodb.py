@@ -399,7 +399,7 @@ if __name__ == "__main__":
     # data_path = os.path.abspath(str(cwd)+'/../data/')
 
     ext_filter = ['html', 'xml']
-    data_path = '/data/Springer/'
+    data_path = '/data/SpringerNature/'
     mu = MongoUploader(
         data_path=data_path,
         upload_from_local_directory=True
